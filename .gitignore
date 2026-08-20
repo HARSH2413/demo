@@ -1,0 +1,22 @@
+# --- Next.js / Frontend ---
+node_modules/
+.next/
+out/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Python / Backend ---
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# --- OS / IDE Files ---
+.DS_Store
+.vscode/ 
+
+# google credentials
+google_credentials.json
