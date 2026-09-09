@@ -13,6 +13,7 @@ from app.infrastructure.reranker_adapter import FastEmbedRerankerAdapter
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.query_rewriter import QueryRewriter
+from app.services.box_service import BoxService
 
 
 # ── Singleton Adapters (created once, reused across all requests) ──
@@ -78,4 +79,10 @@ def get_ingestion_service() -> IngestionService:
         chunk_overlap=settings.CHUNK_OVERLAP,
         batch_size=settings.INGESTION_BATCH_SIZE,
         llm=_get_llm_adapter(),  # For document summary generation
+    )
+
+def get_box_service() -> BoxService:
+    """FastAPI will call this to get a fully configured BoxService."""
+    return BoxService(
+        db=_get_db_adapter()
     )

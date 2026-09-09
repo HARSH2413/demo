@@ -18,6 +18,7 @@ from app.api.chat import router as chat_router
 from app.api.upload import router as upload_router
 from app.api.documents import router as documents_router
 from app.api.drive import router as drive_router
+from app.api.boxes import router as boxes_router
 
 
 @asynccontextmanager
@@ -78,6 +79,7 @@ app.include_router(chat_router)
 app.include_router(upload_router)
 app.include_router(documents_router)
 app.include_router(drive_router)
+app.include_router(boxes_router)
 
 
 @app.get("/", tags=["Health"])

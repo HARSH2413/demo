@@ -244,3 +244,59 @@ class SupabaseAdapter(IVectorStore):
         except Exception as e:
             logger.error(f"Failed to fetch neighboring chunks for '{filename}': {e}")
             return []
+
+    # ── Box Operations (Phase 1A) ──
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase create_box retry (attempt {rs.attempt_number})"),
+    )
+    def create_box(self, name: str, user_id: str, description: str = None) -> dict:
+        response = self.client.table("boxes").insert({
+            "name": name,
+            "user_id": user_id,
+            "description": description
+        }).execute()
+        return response.data[0] if response.data else {}
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase list_boxes retry (attempt {rs.attempt_number})"),
+    )
+    def list_boxes(self, user_id: str) -> list[dict]:
+        response = self.client.table("boxes").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        return response.data
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase get_box retry (attempt {rs.attempt_number})"),
+    )
+    def get_box(self, box_id: str, user_id: str) -> dict:
+        response = self.client.table("boxes").select("*").eq("id", box_id).eq("user_id", user_id).execute()
+        return response.data[0] if response.data else None
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase update_box retry (attempt {rs.attempt_number})"),
+    )
+    def update_box(self, box_id: str, user_id: str, data: dict) -> dict:
+        response = self.client.table("boxes").update(data).eq("id", box_id).eq("user_id", user_id).execute()
+        return response.data[0] if response.data else None
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase delete_box retry (attempt {rs.attempt_number})"),
+    )
+    def delete_box(self, box_id: str, user_id: str) -> bool:
+        response = self.client.table("boxes").delete().eq("id", box_id).eq("user_id", user_id).execute()
+        return bool(response.data)

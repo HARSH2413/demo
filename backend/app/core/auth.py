@@ -50,3 +50,20 @@ def verify_workspace_access(tenant_id: str, user_id: str) -> bool:
     except Exception as e:
         logger.error(f"Error checking workspace access: {e}")
         return False
+
+def verify_box_access(box_id: str, user_id: str) -> dict:
+    """
+    Checks if a user has access to a box and returns the box object.
+    Raises HTTPException if not found or unauthorized.
+    """
+    db = _get_db_adapter()
+    try:
+        result = db.client.table("boxes").select("*").eq("id", box_id).eq("user_id", user_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Box not found or unauthorized")
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking box access: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
