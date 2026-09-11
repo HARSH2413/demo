@@ -70,7 +70,7 @@ def _get_safe_ext(file_name: str, mime_type: str) -> str:
 # ==========================================
 # 🚀 ENDPOINT: SINGLE FILE IMPORT (user token)
 # ==========================================
-from app.core.auth import get_current_user, verify_workspace_access, UserContext
+from app.core.auth import get_current_user, verify_box_access, UserContext
 
 @router.post("/process")
 async def process_drive_file(
@@ -78,13 +78,13 @@ async def process_drive_file(
     file_id: str = Form(...),
     file_name: str = Form(...),
     access_token: str = Form(...),
-    tenant_id: str = Form(...),
+    box_id: str = Form(...),
     ingestion_service: IngestionService = Depends(get_ingestion_service),
     user: UserContext = Depends(get_current_user),
 ):
     """Endpoint for importing a specific, single file using user's access token."""
-    if not verify_workspace_access(tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this Box.")
     try:
         headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -114,7 +114,7 @@ async def process_drive_file(
         file_bytes = response.content
         file_hash = hashlib.sha256(file_bytes).hexdigest()
 
-        if ingestion_service.db.document_exists(file_hash=file_hash, tenant_id=tenant_id):
+        if ingestion_service.db.document_exists(file_hash=file_hash, box_id=box_id):
             raise HTTPException(status_code=409, detail="Exact file content already exists in the database.")
 
         file_path = os.path.join(TEMP_DIR, f"{file_hash}{safe_ext}")
@@ -128,7 +128,7 @@ async def process_drive_file(
             file_path=file_path,
             filename=final_filename,
             file_hash=file_hash,
-            tenant_id=tenant_id,
+            box_id=box_id,
         )
 
         logger.info(f"Drive file accepted: '{final_filename}' (hash={file_hash[:12]}...)")
@@ -151,7 +151,7 @@ async def process_drive_file(
 @router.post("/sync")
 async def sync_google_drive_folder(
     background_tasks: BackgroundTasks,
-    tenant_id: str = Form(...),
+    box_id: str = Form(...),
     force_resync: bool = Form(False),
     ingestion_service: IngestionService = Depends(get_ingestion_service),
     user: UserContext = Depends(get_current_user),
@@ -162,8 +162,8 @@ async def sync_google_drive_folder(
 
     Set force_resync=true to delete and re-process all files (fixes partial ingestion from crashes).
     """
-    if not verify_workspace_access(tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this Box.")
         
     folder_id = settings.GOOGLE_DRIVE_FOLDER_ID
     if not folder_id:
@@ -183,7 +183,7 @@ async def sync_google_drive_folder(
             }
 
         # 2. Get what we already have in Supabase
-        existing_filenames = ingestion_service.list_files(tenant_id=tenant_id)
+        existing_filenames = ingestion_service.list_files(box_id=box_id)
 
         queued_files = []
         skipped_files = []
@@ -212,8 +212,8 @@ async def sync_google_drive_folder(
             # Force re-sync: delete old chunks first
             if force_resync and (final_filename in existing_filenames or display_name in existing_filenames):
                 try:
-                    ingestion_service.delete_file(filename=final_filename, tenant_id=tenant_id)
-                    ingestion_service.delete_file(filename=display_name, tenant_id=tenant_id)
+                    ingestion_service.delete_file(filename=final_filename, box_id=box_id)
+                    ingestion_service.delete_file(filename=display_name, box_id=box_id)
                     logger.info(f"Force re-sync: deleted old chunks for '{display_name}'")
                 except Exception as e:
                     logger.warning(f"Failed to delete old chunks for '{display_name}': {e}")
@@ -226,7 +226,7 @@ async def sync_google_drive_folder(
                 file_id=file_id,
                 file_name=display_name,
                 mime_type=mime_type,
-                tenant_id=tenant_id,
+                box_id=box_id,
                 ingestion_service=ingestion_service,
             )
 
@@ -259,7 +259,7 @@ def _sync_single_file(
     file_id: str,
     file_name: str,
     mime_type: str,
-    tenant_id: str,
+    box_id: str,
     ingestion_service: IngestionService,
 ):
     """
@@ -286,7 +286,7 @@ def _sync_single_file(
             file_hash = drive_adapter.download_file_to_disk(file_id, temp_download_path)
 
         # Skip if already exists (hash-based dedup)
-        if ingestion_service.db.document_exists(file_hash=file_hash, tenant_id=tenant_id):
+        if ingestion_service.db.document_exists(file_hash=file_hash, box_id=box_id):
             logger.info(f"Skipped '{file_name}' — duplicate hash")
             if os.path.exists(temp_download_path):
                 os.remove(temp_download_path)
@@ -300,7 +300,7 @@ def _sync_single_file(
             file_path=file_path,
             filename=file_name,
             file_hash=file_hash,
-            tenant_id=tenant_id,
+            box_id=box_id,
         )
         logger.info(f"Auto-sync ingested: '{file_name}'")
 

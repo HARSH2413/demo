@@ -23,8 +23,12 @@ def create_box(
     user: UserContext = Depends(get_current_user)
 ):
     try:
+        box_name = data.name.strip()
+        if not box_name:
+            raise HTTPException(status_code=400, detail="Box name cannot be empty.")
+            
         box = box_service.create_box(
-            name=data.name,
+            name=box_name,
             user_id=user.user_id,
             description=data.description
         )
@@ -54,7 +58,9 @@ def get_box(
     box_service: BoxService = Depends(get_box_service),
     user: UserContext = Depends(get_current_user)
 ):
-    box = verify_box_access(box_id, user.user_id)
+    box = box_service.get_box(box_id=box_id, user_id=user.user_id)
+    if not box:
+        raise HTTPException(status_code=404, detail="Box not found or unauthorized")
     return {"status": "success", "data": box}
 
 @router.patch("/{box_id}")
@@ -67,6 +73,11 @@ def update_box(
     verify_box_access(box_id, user.user_id)
     
     update_data = data.model_dump(exclude_unset=True)
+    if 'name' in update_data and update_data['name'] is not None:
+        update_data['name'] = update_data['name'].strip()
+        if not update_data['name']:
+            raise HTTPException(status_code=400, detail="Box name cannot be empty.")
+            
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided to update.")
         

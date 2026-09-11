@@ -61,7 +61,7 @@ class IngestionService:
             ],
         )
 
-    def process_file_background(self, file_path: str, filename: str, file_hash: str, tenant_id: str):
+    def process_file_background(self, file_path: str, filename: str, file_hash: str, box_id: str):
         """
         Background worker for processing files of any size.
 
@@ -76,9 +76,9 @@ class IngestionService:
             file_type = self._detect_file_type(filename)
 
             if filename_lower.endswith(".pdf"):
-                self._process_pdf_streaming(file_path, filename, file_hash, tenant_id, file_type)
+                self._process_pdf_streaming(file_path, filename, file_hash, box_id, file_type)
             else:
-                self._process_small_file(file_path, filename, file_hash, tenant_id, file_type)
+                self._process_small_file(file_path, filename, file_hash, box_id, file_type)
 
         except Exception as e:
             logger.error(f"Failed to process '{filename}': {e}")
@@ -87,7 +87,7 @@ class IngestionService:
                 os.remove(file_path)
                 logger.debug(f"Cleaned up temp file: {file_path}")
 
-    def _process_pdf_streaming(self, file_path: str, filename: str, file_hash: str, tenant_id: str, file_type: str = "PDF"):
+    def _process_pdf_streaming(self, file_path: str, filename: str, file_hash: str, box_id: str, file_type: str = "PDF"):
         """Memory-safe PDF processing — pages in batches with block-based extraction."""
         doc = fitz.open(file_path)
         total_pages = doc.page_count
@@ -96,6 +96,19 @@ class IngestionService:
         total_chunks_saved = 0
         failed_batches = 0
         all_text_for_summary = []  # Collect first pages for summary generation
+        global_chunk_index = 1
+        
+        # 1. Create Parent Document
+        try:
+            document_id = self.db.create_document({
+                "box_id": box_id,
+                "filename": filename,
+                "file_hash": file_hash,
+                "mime_type": "application/pdf"
+            })
+        except Exception as e:
+            logger.error(f"Failed to create parent document for '{filename}': {e}")
+            raise e
 
         for page_start in range(0, total_pages, PDF_PAGE_BATCH_SIZE):
             page_end = min(page_start + PDF_PAGE_BATCH_SIZE, total_pages)
@@ -140,22 +153,29 @@ class IngestionService:
 
                     records = [
                         {
-                            "tenant_id": tenant_id,
-                            "filename": filename,
-                            "file_hash": file_hash,
+                            "document_id": document_id,
                             "content": chunk,
                             "embedding": embeddings[j],
+                            "chunk_index": global_chunk_index + j,
+                            "page_start": page_start + 1,
+                            "page_end": page_end,
+                            "metadata": {"type": file_type}
                         }
                         for j, chunk in enumerate(embed_batch)
                     ]
 
-                    self.db.save_documents(records)
+                    self.db.save_document_chunks(records)
                     total_chunks_saved += len(embed_batch)
+                    global_chunk_index += len(embed_batch)
                     del records, embeddings
 
                 except Exception as e:
                     failed_batches += 1
                     logger.error(f"Failed batch for pages {page_start+1}-{page_end}: {e}")
+                    # ATOMICITY: Clean up on chunk failure
+                    logger.warning(f"Deleting parent document '{filename}' due to chunk failure.")
+                    self.db.delete_document(filename, box_id)
+                    raise e
 
             del chunks
             gc.collect()
@@ -164,11 +184,11 @@ class IngestionService:
 
         doc.close()
 
-        # Generate and store document summary as chunk #0
+        # Generate and store document summary as chunk 0
         if all_text_for_summary:
             self._generate_document_summary(
                 text_preview="\n".join(all_text_for_summary),
-                filename=filename, file_hash=file_hash, tenant_id=tenant_id, file_type=file_type,
+                filename=filename, box_id=box_id, file_type=file_type, document_id=document_id
             )
 
         if failed_batches > 0:
@@ -176,7 +196,7 @@ class IngestionService:
         else:
             logger.info(f"Successfully ingested '{filename}' | {total_pages} pages → {total_chunks_saved} chunks")
 
-    def _process_small_file(self, file_path: str, filename: str, file_hash: str, tenant_id: str, file_type: str = "Document"):
+    def _process_small_file(self, file_path: str, filename: str, file_hash: str, box_id: str, file_type: str = "Document"):
         """Standard processing for DOCX, TXT, CSV, and XLSX files."""
         raw_text = self._extract_text_from_disk(file_path, filename)
         logger.info(f"Extracted text from '{filename}' ({len(raw_text)} chars)")
@@ -188,15 +208,28 @@ class IngestionService:
         total_chunks = len(chunks)
         logger.info(f"Split '{filename}' into {total_chunks} chunks")
 
+        # 1. Create Parent Document
+        try:
+            document_id = self.db.create_document({
+                "box_id": box_id,
+                "filename": filename,
+                "file_hash": file_hash,
+                "mime_type": "text/plain" # Simplified for this demo
+            })
+        except Exception as e:
+            logger.error(f"Failed to create parent document for '{filename}': {e}")
+            raise e
+
         # Generate document summary before deleting raw_text
         self._generate_document_summary(
             text_preview=raw_text[:3000],
-            filename=filename, file_hash=file_hash, tenant_id=tenant_id, file_type=file_type,
+            filename=filename, box_id=box_id, file_type=file_type, document_id=document_id
         )
         del raw_text
 
         total_batches = (total_chunks + self.batch_size - 1) // self.batch_size
         failed_batches = 0
+        global_chunk_index = 1
 
         for i in range(0, total_chunks, self.batch_size):
             batch_num = i // self.batch_size + 1
@@ -213,35 +246,40 @@ class IngestionService:
 
                 records = [
                     {
-                        "tenant_id": tenant_id,
-                        "filename": filename,
-                        "file_hash": file_hash,
+                        "document_id": document_id,
                         "content": chunk,
                         "embedding": embeddings[j],
+                        "chunk_index": global_chunk_index + j,
+                        "metadata": {"type": file_type}
                     }
                     for j, chunk in enumerate(batch_chunks)
                 ]
 
-                self.db.save_documents(records)
+                self.db.save_document_chunks(records)
+                global_chunk_index += len(batch_chunks)
                 del records, embeddings
                 logger.info(f"Processed batch {batch_num}/{total_batches} for '{filename}'")
 
             except Exception as e:
                 failed_batches += 1
                 logger.error(f"Failed batch {batch_num}/{total_batches} for '{filename}': {e}")
+                # ATOMICITY: Clean up on chunk failure
+                logger.warning(f"Deleting parent document '{filename}' due to chunk failure.")
+                self.db.delete_document(filename, box_id)
+                raise e
 
         if failed_batches > 0:
             logger.warning(f"Completed '{filename}' with {failed_batches}/{total_batches} failed batches")
         else:
             logger.info(f"Successfully ingested '{filename}' ({total_batches} batches)")
 
-    def delete_file(self, filename: str, tenant_id: str) -> bool:
+    def delete_file(self, filename: str, box_id: str) -> bool:
         """Deletes all chunks of a document."""
-        return self.db.delete_document(filename=filename, tenant_id=tenant_id)
+        return self.db.delete_document(filename=filename, box_id=box_id)
 
-    def list_files(self, tenant_id: str) -> List[str]:
-        """Lists all unique filenames for a tenant."""
-        return self.db.get_all_documents(tenant_id=tenant_id)
+    def list_files(self, box_id: str) -> List[str]:
+        """Lists all unique filenames for a Box."""
+        return self.db.get_all_documents(box_id=box_id)
 
     def _extract_text_from_disk(self, file_path: str, filename: str) -> str:
         """
@@ -347,8 +385,8 @@ class IngestionService:
         }
         return type_map.get(ext, "Document")
 
-    def _generate_document_summary(self, text_preview: str, filename: str, file_hash: str,
-                                    tenant_id: str, file_type: str):
+    def _generate_document_summary(self, text_preview: str, filename: str, box_id: str,
+                                    file_type: str, document_id: str):
         """
         Uses the LLM to generate a document summary and stores it as a special chunk.
 
@@ -378,12 +416,12 @@ class IngestionService:
             contextual_text = f"[Document: {filename} | Type: {file_type} | Summary]\n\n{summary_content}"
             summary_embedding = self.embedder.embed_text([contextual_text])[0]
 
-            self.db.save_documents([{
-                "tenant_id": tenant_id,
-                "filename": filename,
-                "file_hash": file_hash,
+            self.db.save_document_chunks([{
+                "document_id": document_id,
                 "content": summary_content,
                 "embedding": summary_embedding,
+                "chunk_index": 0,
+                "metadata": {"type": "summary"}
             }])
 
             logger.info(f"Generated and stored document summary for '{filename}'")

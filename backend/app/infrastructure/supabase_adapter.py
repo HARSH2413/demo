@@ -31,6 +31,7 @@ class SupabaseAdapter(IVectorStore):
 
     # ── Document Operations ──
 
+    # ── Legacy Workspace Document Operations ──
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -41,28 +42,53 @@ class SupabaseAdapter(IVectorStore):
         response = self.client.table("documents").insert(records).execute()
         return len(response.data)
 
+    # ── Box Document Operations (Phase 1B) ──
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase create_document retry (attempt {rs.attempt_number})"),
+    )
+    def create_document(self, document: Dict[str, Any]) -> str:
+        """Creates a parent document and returns its ID."""
+        doc_response = self.client.table("documents").insert(document).execute()
+        if not doc_response.data:
+            raise RuntimeError("Failed to create document record.")
+        return doc_response.data[0]["id"]
+        
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase save_document_chunks retry (attempt {rs.attempt_number})"),
+    )
+    def save_document_chunks(self, chunks: List[Dict[str, Any]]) -> int:
+        """Saves a batch of chunks for a document."""
+        response = self.client.table("document_chunks").insert(chunks).execute()
+        return len(response.data)
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase search_similar retry (attempt {rs.attempt_number})"),
     )
-    def search_similar(self, query_vector: list[float], query_text: str, tenant_id: str, limit: int = 10) -> list[dict]:
-        """Runs the Hybrid Search RPC in Supabase."""
+    def search_similar(self, query_vector: list[float], query_text: str, box_id: str, limit: int = 10) -> list[dict]:
+        """Runs the Hybrid Search RPC in Supabase (Box scoped)."""
         try:
             response = self.client.rpc(
-                "match_documents_hybrid",
+                "match_documents_hybrid_box",
                 {
                     "query_embedding": query_vector,
                     "query_text": query_text,
-                    "match_tenant_id": tenant_id,
+                    "match_box_id": box_id,
                     "match_count": limit,
                 },
             ).execute()
-            logger.info(f"Hybrid search returned {len(response.data)} docs for tenant={tenant_id}")
+            logger.info(f"Hybrid search returned {len(response.data)} docs for box={box_id}")
             return response.data
         except Exception as e:
-            logger.error(f"Hybrid search failed for tenant={tenant_id}, query='{query_text[:80]}': {e}")
+            logger.error(f"Hybrid search failed for box={box_id}, query='{query_text[:80]}': {e}")
             return []
 
     @retry(
@@ -71,13 +97,13 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase document_exists retry (attempt {rs.attempt_number})"),
     )
-    def document_exists(self, file_hash: str, tenant_id: str) -> bool:
-        """Checks if a file with this exact SHA-256 fingerprint already exists."""
+    def document_exists(self, file_hash: str, box_id: str) -> bool:
+        """Checks if a file with this exact SHA-256 fingerprint already exists in the box."""
         response = (
             self.client.table("documents")
             .select("id")
             .eq("file_hash", file_hash)
-            .eq("tenant_id", tenant_id)
+            .eq("box_id", box_id)
             .limit(1)
             .execute()
         )
@@ -89,11 +115,11 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_document retry (attempt {rs.attempt_number})"),
     )
-    def delete_document(self, filename: str, tenant_id: str) -> bool:
+    def delete_document(self, filename: str, box_id: str) -> bool:
         response = (
             self.client.table("documents")
             .delete()
-            .eq("tenant_id", tenant_id)
+            .eq("box_id", box_id)
             .eq("filename", filename)
             .execute()
         )
@@ -105,18 +131,18 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase get_all_documents retry (attempt {rs.attempt_number})"),
     )
-    def get_all_documents(self, tenant_id: str) -> List[str]:
-        """Fetches a list of all unique filenames for a tenant."""
-        response = self.client.table("documents").select("filename").eq("tenant_id", tenant_id).execute()
+    def get_all_documents(self, box_id: str) -> List[str]:
+        """Fetches a list of all unique filenames for a box."""
+        response = self.client.table("documents").select("filename").eq("box_id", box_id).execute()
         unique_files = list(set([row["filename"] for row in response.data]))
         return unique_files
 
-    def get_document_metadata(self, tenant_id: str) -> List[Dict[str, Any]]:
+    def get_document_metadata(self, box_id: str) -> List[Dict[str, Any]]:
         """Returns one record per document for the library UI."""
         response = (
             self.client.table("documents")
-            .select("filename, file_hash, created_at")
-            .eq("tenant_id", tenant_id)
+            .select("id, filename, file_hash, created_at")
+            .eq("box_id", box_id)
             .order("created_at", desc=True)
             .execute()
         )
@@ -125,6 +151,7 @@ class SupabaseAdapter(IVectorStore):
             filename = row["filename"]
             if filename not in documents:
                 documents[filename] = {
+                    "id": row.get("id"),
                     "filename": filename,
                     "file_hash": row.get("file_hash"),
                     "created_at": row.get("created_at"),
@@ -222,27 +249,30 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase get_neighboring_chunks retry (attempt {rs.attempt_number})"),
     )
-    def get_neighboring_chunks(self, filename: str, content_snippet: str, tenant_id: str, limit: int = 5) -> list[dict]:
+    def get_neighboring_chunks(self, document_id: str, chunk_index: int, limit: int = 5) -> list[dict]:
         """
-        Fetches chunks from the same document to provide surrounding context.
-
-        Used for parent-child retrieval — when a matched chunk is small,
-        we expand context by including adjacent chunks from the same file.
-        Returns chunks ordered by their database insertion order (proxy for position).
+        Fetches chunks from the same document purely based on chunk_index.
+        Retrieves exactly the chunks around the given index to provide surrounding context.
         """
         try:
+            # We fetch a window around the index: [chunk_index - limit//2, chunk_index + limit//2]
+            # but for simplicity, we can fetch chunk_index-2 to chunk_index+2
+            half_limit = limit // 2
+            min_index = max(0, chunk_index - half_limit)
+            max_index = chunk_index + half_limit
+
             response = (
-                self.client.table("documents")
-                .select("id, filename, content")
-                .eq("tenant_id", tenant_id)
-                .eq("filename", filename)
-                .order("created_at")
-                .limit(limit)
+                self.client.table("document_chunks")
+                .select("id, document_id, content, chunk_index, page_start, page_end")
+                .eq("document_id", document_id)
+                .gte("chunk_index", min_index)
+                .lte("chunk_index", max_index)
+                .order("chunk_index")
                 .execute()
             )
             return response.data
         except Exception as e:
-            logger.error(f"Failed to fetch neighboring chunks for '{filename}': {e}")
+            logger.error(f"Failed to fetch neighboring chunks for doc='{document_id}': {e}")
             return []
 
     # ── Box Operations (Phase 1A) ──

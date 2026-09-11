@@ -21,18 +21,17 @@ HASH_CHUNK_SIZE = 65536
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".csv", ".xlsx"}
 
 
-from app.core.auth import get_current_user, verify_workspace_access, UserContext
+from app.core.auth import get_current_user, verify_box_access, UserContext
 
-@router.post("/")
+@router.post("/box")
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    tenant_id: str = Form(...),
+    box_id: str = Form(...),
     ingestion_service: IngestionService = Depends(get_ingestion_service),
     user: UserContext = Depends(get_current_user),
 ):
-    if not verify_workspace_access(tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    verify_box_access(box_id, user.user_id)
     original_filename = Path(file.filename or "").name
     safe_ext = Path(original_filename).suffix.lower()
     if not original_filename or safe_ext not in ALLOWED_EXTENSIONS:
@@ -64,7 +63,7 @@ async def upload_document(
         file_hash = sha256.hexdigest()
 
         # 2. Check Database for this exact fingerprint
-        if ingestion_service.db.document_exists(file_hash=file_hash, tenant_id=tenant_id):
+        if ingestion_service.db.document_exists(file_hash=file_hash, box_id=box_id):
             os.remove(temp_path)  # Clean up temp file
             raise HTTPException(status_code=409, detail="Exact file content already exists. Duplicate rejected.")
 
@@ -72,14 +71,13 @@ async def upload_document(
         file_path = os.path.join(TEMP_DIR, f"{file_hash}{safe_ext}")
         os.rename(temp_path, file_path)
 
-        # 4. Fire and Forget: Send to the Background Worker
         background_tasks.add_task(
             _process_upload_safely,
             ingestion_service,
             file_path=file_path,
             filename=original_filename,
             file_hash=file_hash,
-            tenant_id=tenant_id,
+            box_id=box_id,
         )
 
         logger.info(f"Upload accepted: '{original_filename}' (hash={file_hash[:12]}...)")
@@ -105,7 +103,7 @@ def _process_upload_safely(
     file_path: str,
     filename: str,
     file_hash: str,
-    tenant_id: str,
+    box_id: str,
 ) -> None:
     """Keep an ingestion failure isolated and emit an actionable server log."""
     try:
@@ -113,7 +111,7 @@ def _process_upload_safely(
             file_path=file_path,
             filename=filename,
             file_hash=file_hash,
-            tenant_id=tenant_id,
+            box_id=box_id,
         )
     except Exception:
         # This is deliberately a final boundary around the background task.
