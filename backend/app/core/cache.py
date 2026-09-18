@@ -79,14 +79,14 @@ class SimpleCache:
 class QueryResultCache(SimpleCache):
     """Cache for full query results (search results, reranking)."""
 
-    def get_query_result(self, query: str, tenant_id: str) -> Optional[list]:
+    def get_query_result(self, query: str, box_id: str) -> Optional[list]:
         """Get cached search results."""
-        key = f"{tenant_id}:{query}"
+        key = f"{box_id}:{query}"
         return super().get(key)
 
-    def set_query_result(self, query: str, tenant_id: str, results: list) -> None:
+    def set_query_result(self, query: str, box_id: str, results: list) -> None:
         """Cache search results."""
-        key = f"{tenant_id}:{query}"
+        key = f"{box_id}:{query}"
         super().set(key, results)
 
 
@@ -147,14 +147,14 @@ class RedisCache:
         key = f"embed:{hashlib.md5(text.encode()).hexdigest()}"
         self.set(key, embedding, ttl=24 * 3600)  # 24 hours for embeddings
 
-    def get_query_result(self, query: str, tenant_id: str) -> Optional[list]:
+    def get_query_result(self, query: str, box_id: str) -> Optional[list]:
         """Get cached search results."""
-        key = f"query:{tenant_id}:{hashlib.md5(query.encode()).hexdigest()}"
+        key = f"query:{box_id}:{hashlib.md5(query.encode()).hexdigest()}"
         return self.get(key)
 
-    def set_query_result(self, query: str, tenant_id: str, results: list) -> None:
+    def set_query_result(self, query: str, box_id: str, results: list) -> None:
         """Cache search results."""
-        key = f"query:{tenant_id}:{hashlib.md5(query.encode()).hexdigest()}"
+        key = f"query:{box_id}:{hashlib.md5(query.encode()).hexdigest()}"
         self.set(key, results, ttl=3600)  # 1 hour
 
     def clear(self) -> None:

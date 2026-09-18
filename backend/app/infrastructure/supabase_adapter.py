@@ -166,26 +166,26 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase create_chat_session retry (attempt {rs.attempt_number})"),
     )
-    def create_chat_session(self, tenant_id: str, title: str = "New Conversation") -> str:
+    def create_chat_session(self, box_id: str, title: str = "New Conversation") -> str:
         """Creates a new blank chat room and returns the session_id."""
         response = self.client.table("chat_sessions").insert({
-            "tenant_id": tenant_id,
+            "box_id": box_id,
             "title": title,
         }).execute()
         return response.data[0]["id"]
 
-    def list_chat_sessions(self, tenant_id: str, limit: int = 50) -> list:
-        """Lists the most recent conversations for one tenant."""
-        response = self.client.table("chat_sessions").select("id, title, created_at").eq("tenant_id", tenant_id).order("created_at", desc=True).limit(limit).execute()
+    def list_chat_sessions(self, box_id: str, limit: int = 50) -> list:
+        """Lists the most recent conversations for one box."""
+        response = self.client.table("chat_sessions").select("id, title, created_at").eq("box_id", box_id).order("created_at", desc=True).limit(limit).execute()
         return response.data
 
-    def rename_chat_session(self, session_id: str, tenant_id: str, title: str) -> bool:
-        response = self.client.table("chat_sessions").update({"title": title}).eq("id", session_id).eq("tenant_id", tenant_id).execute()
+    def rename_chat_session(self, session_id: str, box_id: str, title: str) -> bool:
+        response = self.client.table("chat_sessions").update({"title": title}).eq("id", session_id).eq("box_id", box_id).execute()
         return bool(response.data)
 
-    def delete_chat_session(self, session_id: str, tenant_id: str) -> bool:
+    def delete_chat_session(self, session_id: str, box_id: str) -> bool:
         """Deletes a conversation; chat_messages must cascade at the database level."""
-        response = self.client.table("chat_sessions").delete().eq("id", session_id).eq("tenant_id", tenant_id).execute()
+        response = self.client.table("chat_sessions").delete().eq("id", session_id).eq("box_id", box_id).execute()
         return bool(response.data)
 
     @retry(
@@ -194,13 +194,13 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase get_chat_history retry (attempt {rs.attempt_number})"),
     )
-    def get_chat_history(self, session_id: str, tenant_id: str) -> list:
-        """Fetches history only when the session belongs to the requested tenant."""
+    def get_chat_history(self, session_id: str, box_id: str) -> list:
+        """Fetches history only when the session belongs to the requested box."""
         session = (
             self.client.table("chat_sessions")
             .select("id")
             .eq("id", session_id)
-            .eq("tenant_id", tenant_id)
+            .eq("box_id", box_id)
             .limit(1)
             .execute()
         )
@@ -215,13 +215,13 @@ class SupabaseAdapter(IVectorStore):
         )
         return response.data
 
-    def session_belongs_to_tenant(self, session_id: str, tenant_id: str) -> bool:
+    def session_belongs_to_box(self, session_id: str, box_id: str) -> bool:
         """Checks ownership before a request can read from or write to a chat session."""
         response = (
             self.client.table("chat_sessions")
             .select("id")
             .eq("id", session_id)
-            .eq("tenant_id", tenant_id)
+            .eq("box_id", box_id)
             .limit(1)
             .execute()
         )

@@ -21,10 +21,10 @@ export async function login(formData: FormData) {
 
   revalidatePath('/', 'layout')
   
-  // After login, we guarantee a workspace exists via DB trigger, so go straight to chat
+  // After login, go straight to boxes
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
-      redirect('/workspace/chat')
+      redirect('/boxes')
   } else {
       redirect('/login?message=Authentication failed')
   }
@@ -62,8 +62,8 @@ export async function signup(formData: FormData) {
     redirect(`/signup?message=${encodeURIComponent(error.message)}`)
   }
 
-  // After signup, the DB trigger auto-creates a workspace, so go straight to chat
-  redirect('/workspace/chat')
+  // After signup, go straight to boxes
+  redirect('/boxes')
 }
 
 export async function signInWithGoogle() {
@@ -97,27 +97,18 @@ export async function createWorkspace(formData: FormData) {
 
   const workspaceName = formData.get('workspaceName') as string
 
-  // Insert workspace (RLS allows owner_id = auth.uid())
-  const { data: workspace, error: workspaceError } = await supabase
-      .from('workspaces')
-      .insert({ name: workspaceName, owner_id: user.id })
+  // Insert box (RLS allows user_id = auth.uid())
+  const { data: box, error: boxError } = await supabase
+      .from('boxes')
+      .insert({ name: workspaceName, user_id: user.id })
       .select('id')
       .single()
 
-  if (workspaceError || !workspace) {
-      redirect(`/onboarding?message=Could not create workspace: ${workspaceError?.message}`)
+  if (boxError || !box) {
+      redirect(`/onboarding?message=Could not create box: ${boxError?.message}`)
   }
 
-  // Insert workspace member (RLS allows user_id = auth.uid() AND role = 'owner')
-  const { error: memberError } = await supabase
-      .from('workspace_members')
-      .insert({ workspace_id: workspace.id, user_id: user.id, role: 'owner' })
-
-  if (memberError) {
-      redirect(`/onboarding?message=Could not join workspace: ${memberError.message}`)
-  }
-
-  redirect('/workspace/chat')
+  redirect(`/boxes/${box.id}`)
 }
 
 export async function logout() {

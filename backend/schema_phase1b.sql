@@ -228,3 +228,74 @@ $$;
 -- Since this is intended for backend only (which authenticates as service_role), we restrict it.
 REVOKE EXECUTE ON FUNCTION public.match_documents_hybrid_box(vector(1024), text, uuid, int) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.match_documents_hybrid_box(vector(1024), text, uuid, int) TO service_role;
+
+-- ==========================================
+-- 4. Chat Sessions
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    box_id UUID NOT NULL REFERENCES public.boxes(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT 'New Conversation',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- ==========================================
+-- 5. Chat Messages
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Index for chat messages
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON public.chat_messages(session_id);
+
+-- Enable RLS
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- Chat Sessions Policies
+DROP POLICY IF EXISTS "chat_sessions_select_policy" ON public.chat_sessions;
+CREATE POLICY "chat_sessions_select_policy" ON public.chat_sessions FOR SELECT USING (
+    box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid())
+);
+
+DROP POLICY IF EXISTS "chat_sessions_insert_policy" ON public.chat_sessions;
+CREATE POLICY "chat_sessions_insert_policy" ON public.chat_sessions FOR INSERT WITH CHECK (
+    box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid())
+);
+
+DROP POLICY IF EXISTS "chat_sessions_update_policy" ON public.chat_sessions;
+CREATE POLICY "chat_sessions_update_policy" ON public.chat_sessions FOR UPDATE USING (
+    box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid())
+);
+
+DROP POLICY IF EXISTS "chat_sessions_delete_policy" ON public.chat_sessions;
+CREATE POLICY "chat_sessions_delete_policy" ON public.chat_sessions FOR DELETE USING (
+    box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid())
+);
+
+-- Chat Messages Policies
+DROP POLICY IF EXISTS "chat_messages_select_policy" ON public.chat_messages;
+CREATE POLICY "chat_messages_select_policy" ON public.chat_messages FOR SELECT USING (
+    session_id IN (SELECT id FROM public.chat_sessions WHERE box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid()))
+);
+
+DROP POLICY IF EXISTS "chat_messages_insert_policy" ON public.chat_messages;
+CREATE POLICY "chat_messages_insert_policy" ON public.chat_messages FOR INSERT WITH CHECK (
+    session_id IN (SELECT id FROM public.chat_sessions WHERE box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid()))
+);
+
+DROP POLICY IF EXISTS "chat_messages_update_policy" ON public.chat_messages;
+CREATE POLICY "chat_messages_update_policy" ON public.chat_messages FOR UPDATE USING (
+    session_id IN (SELECT id FROM public.chat_sessions WHERE box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid()))
+);
+
+DROP POLICY IF EXISTS "chat_messages_delete_policy" ON public.chat_messages;
+CREATE POLICY "chat_messages_delete_policy" ON public.chat_messages FOR DELETE USING (
+    session_id IN (SELECT id FROM public.chat_sessions WHERE box_id IN (SELECT id FROM public.boxes WHERE user_id = auth.uid()))
+);

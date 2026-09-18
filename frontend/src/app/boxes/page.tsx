@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import BoxesClient from './BoxesClient'
 
-export default async function WorkspaceChatPage() {
+export default async function BoxesPage() {
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
@@ -10,6 +11,7 @@ export default async function WorkspaceChatPage() {
       redirect('/login')
   }
 
-  // Legacy workspace flow - redirecting to new Box-first flow
-  redirect('/boxes')
+  return (
+    <BoxesClient />
+  )
 }

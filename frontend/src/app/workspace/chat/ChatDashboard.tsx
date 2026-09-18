@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import Link from 'next/link';
 import {
   MessageSquare, Plus, FileText, Send, Paperclip, X,
   Loader2, Info, Database, History, CheckCircle2,
@@ -177,9 +178,7 @@ function KnowledgeBaseView({
 
 // ── Main Dashboard ──
 
-export default function SecureBrainDashboard({ workspaces }: { workspaces: { id: string, name: string }[] }) {
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState(workspaces[0]?.id || "");
-  const tenantId = activeWorkspaceId;
+export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string, boxName: string }) {
   const [activeDoc, setActiveDoc] = useState<{ title: string, content: string, fileUrl?: string } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -255,7 +254,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
 
   const fetchDocuments = useCallback(async () => {
     try {
-      const data = await apiFetch(`/api/v1/documents/?tenant_id=${tenantId}`);
+      const data = await apiFetch(`/api/v1/documents/?box_id=${boxId}`);
       if (data.documents) {
         setDocuments((previous) => {
           const indexed = data.documents.map((document: DocumentRecord) => ({ ...document, status: 'indexed' as const }));
@@ -268,18 +267,18 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
     } catch {
       // apiFetch already displays a helpful error.
     }
-  }, [apiFetch, tenantId]);
+  }, [apiFetch, boxId]);
 
   useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
 
   const fetchChatSessions = useCallback(async () => {
     try {
-      const data = await apiFetch(`/api/v1/chat/sessions?tenant_id=${tenantId}`);
+      const data = await apiFetch(`/api/v1/chat/sessions?box_id=${boxId}`);
       setRecentChats(data.sessions || []);
     } catch {
       // apiFetch already displays a helpful error.
     }
-  }, [apiFetch, tenantId]);
+  }, [apiFetch, boxId]);
 
   useEffect(() => { fetchChatSessions(); }, [fetchChatSessions]);
 
@@ -287,7 +286,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
     if (!sessionId) return;
     const loadHistory = async () => {
       try {
-        const data = await apiFetch(`/api/v1/chat/sessions/${sessionId}?tenant_id=${tenantId}`);
+        const data = await apiFetch(`/api/v1/chat/sessions/${sessionId}?box_id=${boxId}`);
         setMessages(data.history.map((m: { role: string; content: string }) => ({
           role: m.role === 'assistant' ? 'ai' : 'user',
           content: m.content
@@ -297,7 +296,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
       }
     };
     loadHistory();
-  }, [sessionId, tenantId, apiFetch, showToast]);
+  }, [sessionId, boxId, apiFetch, showToast]);
 
   const uploadFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
@@ -316,7 +315,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
     await Promise.all(validFiles.map(async (file) => {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('tenant_id', tenantId);
+      formData.append('box_id', boxId);
       try {
         const data = await apiFetch('/api/v1/upload/', { method: 'POST', body: formData });
         showToast(data.message, 'success');
@@ -336,7 +335,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
     const title = window.prompt('Rename conversation', chat.title)?.trim();
     if (!title || title === chat.title) return;
     try {
-      await apiFetch(`/api/v1/chat/sessions/${chat.id}?tenant_id=${tenantId}`, {
+      await apiFetch(`/api/v1/chat/sessions/${chat.id}?box_id=${boxId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
@@ -349,7 +348,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
   const handleDeleteChat = async (chat: ChatSession) => {
     if (!window.confirm(`Delete "${chat.title}"? This cannot be undone.`)) return;
     try {
-      await apiFetch(`/api/v1/chat/sessions/${chat.id}?tenant_id=${tenantId}`, { method: 'DELETE' });
+      await apiFetch(`/api/v1/chat/sessions/${chat.id}?box_id=${boxId}`, { method: 'DELETE' });
       setRecentChats(previous => previous.filter(item => item.id !== chat.id));
       if (sessionId === chat.id) {
         setSessionId(null);
@@ -362,7 +361,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
   const handleDriveSync = async (forceResync: boolean = false) => {
     setIsSyncing(true);
     const formData = new FormData();
-    formData.append("tenant_id", tenantId);
+    formData.append("box_id", boxId);
     if (forceResync) {
       formData.append("force_resync", "true");
     }
@@ -404,7 +403,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
         const data = await apiFetch("/api/v1/chat/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tenant_id: tenantId, title: userQuery.slice(0, 30) })
+          body: JSON.stringify({ box_id: boxId, title: userQuery.slice(0, 30) })
         });
         currentSid = data.session_id;
         setSessionId(currentSid);
@@ -420,7 +419,7 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
       const data = await apiFetch("/api/v1/chat/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: userQuery, tenant_id: tenantId, session_id: currentSid })
+        body: JSON.stringify({ question: userQuery, box_id: boxId, session_id: currentSid })
       });
       setMessages(prev => {
         const filtered = retryContent ? prev.filter(m => !(m.error && m.role === 'ai')) : prev;
@@ -435,13 +434,14 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
 
   const handleDeleteFile = async (filename: string) => {
     try {
-      await apiFetch(`/api/v1/documents/?filename=${encodeURIComponent(filename)}&tenant_id=${tenantId}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/documents/?filename=${encodeURIComponent(filename)}&box_id=${boxId}`, { method: "DELETE" });
       setDocuments(prev => prev.filter(document => document.filename !== filename));
       showToast(`Deleted "${filename}"`, "success");
     } catch { }
   };
 
   const getFileUrl = (name: string) => {
+    const localFiles: Record<string, string> = {};
     const key = Object.keys(localFiles).find(k => k.toLowerCase() === name.toLowerCase());
     return key ? localFiles[key] : undefined;
   };
@@ -458,20 +458,15 @@ export default function SecureBrainDashboard({ workspaces }: { workspaces: { id:
           <span className="font-bold text-xl tracking-tight text-slate-800">ActionRAG</span>
         </div>
 
-        {workspaces && workspaces.length > 0 && (
-          <div className="px-6 mb-6">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2 block">Active Workspace</label>
-            <select 
-              value={activeWorkspaceId} 
-              onChange={(e) => setActiveWorkspaceId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none font-semibold transition-all hover:border-indigo-300 appearance-none cursor-pointer"
-            >
-              {workspaces.map(ws => (
-                <option key={ws.id} value={ws.id}>{ws.name}</option>
-              ))}
-            </select>
+        <div className="px-6 mb-6">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2 block">Active Box</label>
+          <div className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl block p-2.5 font-semibold">
+            {boxName}
           </div>
-        )}
+          <Link href="/boxes" className="mt-3 inline-block text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
+            ← Back to Boxes
+          </Link>
+        </div>
 
         <button onClick={() => { setMessages([]); setSessionId(null); setCurrentView('chat'); }} className="mx-6 mb-8 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100">
           <Plus size={18} /> New Investigation

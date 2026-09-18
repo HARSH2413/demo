@@ -11,21 +11,7 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Check if the user already has a workspace
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: members } = await supabase
-          .from('workspace_members')
-          .select('workspace_id')
-          .eq('user_id', user.id)
-          .limit(1)
-
-        if (members && members.length > 0) {
-          return NextResponse.redirect(`${origin}/workspace/chat`)
-        }
-      }
-      // No workspace yet — go to onboarding
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(`${origin}/boxes`)
     }
   }
 

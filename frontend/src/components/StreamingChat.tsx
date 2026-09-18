@@ -16,10 +16,10 @@ interface Citation {
 
 interface StreamingChatProps {
   sessionId: string;
-  tenantId: string;
+  boxId: string;
 }
 
-export function StreamingChat({ sessionId, tenantId }: StreamingChatProps) {
+export function StreamingChat({ sessionId, boxId }: StreamingChatProps) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [citations, setCitations] = useState<Citation[]>([]);
@@ -54,7 +54,7 @@ export function StreamingChat({ sessionId, tenantId }: StreamingChatProps) {
         },
         body: JSON.stringify({
           question,
-          tenant_id: tenantId,
+          box_id: boxId,
           session_id: sessionId,
           use_streaming: true,
         }),

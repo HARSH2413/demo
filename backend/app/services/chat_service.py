@@ -64,7 +64,7 @@ class ChatService:
             return float(doc.get("rerank_score", 0.0))
         return float(doc.get("similarity", 0.0))
 
-    def ask_question(self, question: str, tenant_id: str, session_id: str) -> dict:
+    def ask_question(self, question: str, box_id: str, session_id: str) -> dict:
         total_start = time.perf_counter()
 
         # 1. Save user question to stateful memory
@@ -76,7 +76,7 @@ class ChatService:
         # 2. Fetch history (graceful: empty history if DB fails)
         chat_history = []
         try:
-            chat_history = self.db.get_chat_history(session_id=session_id, tenant_id=tenant_id)
+            chat_history = self.db.get_chat_history(session_id=session_id, box_id=box_id)
         except Exception as e:
             logger.warning(f"Failed to fetch chat history, continuing without it: {e}")
 
@@ -93,7 +93,7 @@ class ChatService:
 
         # 4-8. Retrieval Pipeline (normal pass)
         retrieval_start = time.perf_counter()
-        retrieved_docs = self._retrieve_documents(search_query=search_query, tenant_id=tenant_id)
+        retrieved_docs = self._retrieve_documents(search_query=search_query, box_id=box_id)
         retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
 
         # 9. Confidence detection (normal pass)
@@ -105,7 +105,7 @@ class ChatService:
             rescue_start = time.perf_counter()
             rescue_docs = self._retrieve_documents(
                 search_query=search_query,
-                tenant_id=tenant_id,
+                box_id=box_id,
                 force_hyde=True,
                 force_multi_query=True,
                 retrieval_limit=max(self.retrieval_top_k, self.retrieval_top_k + 10),
@@ -183,7 +183,7 @@ class ChatService:
         context_text = "\n\n".join(context_parts)
 
         # 11. Structured logging
-        logger.info(f"Chat query | tenant={tenant_id} | session={session_id}")
+        logger.info(f"Chat query | box={box_id} | session={session_id}")
         logger.debug(f"Retrieved {len(retrieved_docs)} docs: {[d.get('filename') for d in retrieved_docs]}")
 
         # 12. THE DEFINED FALLBACK PHRASE
@@ -351,7 +351,7 @@ class ChatService:
         self,
         queries: list[str],
         original_query: str,
-        tenant_id: str,
+        box_id: str,
         retrieval_limit: Optional[int] = None,
     ) -> list[dict]:
         """
@@ -369,7 +369,7 @@ class ChatService:
                 docs = self.db.search_similar(
                     query_vector=query_vector,
                     query_text=original_query,  # Always use original for keyword search
-                    tenant_id=tenant_id,
+                    box_id=box_id,
                     limit=search_limit,
                 )
                 for doc in docs:
@@ -388,7 +388,7 @@ class ChatService:
     def _retrieve_documents(
         self,
         search_query: str,
-        tenant_id: str,
+        box_id: str,
         force_hyde: Optional[bool] = None,
         force_multi_query: Optional[bool] = None,
         retrieval_limit: Optional[int] = None,
@@ -403,7 +403,7 @@ class ChatService:
         retrieved_docs = self._multi_query_search(
             queries=search_queries,
             original_query=search_query,
-            tenant_id=tenant_id,
+            box_id=box_id,
             retrieval_limit=retrieval_limit,
         )
 
@@ -422,7 +422,7 @@ class ChatService:
         retrieved_docs = self._dynamic_relevance_filter(retrieved_docs)
 
         if self.enable_neighbor_context and retrieved_docs:
-            retrieved_docs = self._expand_with_neighbors(retrieved_docs, tenant_id)
+            retrieved_docs = self._expand_with_neighbors(retrieved_docs)
 
         return retrieved_docs
 
@@ -461,7 +461,7 @@ class ChatService:
 
         return filtered
 
-    def _expand_with_neighbors(self, docs: list, tenant_id: str) -> list:
+    def _expand_with_neighbors(self, docs: list) -> list:
         """
         Expands retrieved chunks with neighboring context from the same document.
 
@@ -482,10 +482,16 @@ class ChatService:
             seen_filenames.add(filename)
 
             try:
+                document_id = doc.get("document_id")
+                chunk_index = doc.get("chunk_index")
+                
+                if document_id is None or chunk_index is None:
+                    expanded.append(doc)
+                    continue
+
                 neighbors = self.db.get_neighboring_chunks(
-                    filename=filename,
-                    content_snippet=doc.get("content", "")[:100],
-                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    chunk_index=chunk_index,
                     limit=5,
                 )
 

@@ -9,7 +9,7 @@ from app.core.dependencies import get_chat_service
 from app.core.rate_limiter import limiter
 from app.core.config import settings
 from app.core.logger import logger
-from app.core.auth import get_current_user, verify_workspace_access, UserContext
+from app.core.auth import get_current_user, verify_box_access, UserContext
 
 router = APIRouter(prefix="/api/v1/chat", tags=["Enterprise Q&A"])
 
@@ -17,13 +17,13 @@ router = APIRouter(prefix="/api/v1/chat", tags=["Enterprise Q&A"])
 # ── API Contracts ──
 
 class SessionRequest(BaseModel):
-    tenant_id: str
+    box_id: str
     title: Optional[str] = "New Conversation"
 
 
 class ChatRequest(BaseModel):
     question: str
-    tenant_id: str
+    box_id: str
     session_id: str
 
 
@@ -51,14 +51,14 @@ class EnhancedChatResponse(BaseModel):
 
 @router.get("/sessions")
 async def list_chat_sessions(
-    tenant_id: str,
+    box_id: str,
     chat_service: ChatService = Depends(get_chat_service),
     user: UserContext = Depends(get_current_user),
 ):
-    if not verify_workspace_access(tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this box.")
     try:
-        return {"status": "success", "sessions": chat_service.db.list_chat_sessions(tenant_id)}
+        return {"status": "success", "sessions": chat_service.db.list_chat_sessions(box_id)}
     except Exception as e:
         logger.exception(f"Chat session list failed: {e}")
         raise HTTPException(status_code=500, detail="Unable to load chat sessions.")
@@ -71,11 +71,11 @@ async def create_new_chat_session(
     user: UserContext = Depends(get_current_user),
 ):
     """Creates a blank chat room and returns the session_id to the frontend."""
-    if not verify_workspace_access(request.tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(request.box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this box.")
     try:
         session_id = chat_service.db.create_chat_session(
-            tenant_id=request.tenant_id,
+            box_id=request.box_id,
             title=request.title,
         )
         return {"status": "success", "session_id": session_id}
@@ -87,17 +87,17 @@ async def create_new_chat_session(
 @router.get("/sessions/{session_id}")
 async def get_chat_history(
     session_id: str,
-    tenant_id: str,
+    box_id: str,
     chat_service: ChatService = Depends(get_chat_service),
     user: UserContext = Depends(get_current_user),
 ):
     """Allows the frontend to load past messages when a user clicks an old chat."""
-    if not verify_workspace_access(tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this box.")
     try:
-        if not chat_service.db.session_belongs_to_tenant(session_id, tenant_id):
+        if not chat_service.db.session_belongs_to_box(session_id, box_id):
             raise HTTPException(status_code=404, detail="Chat session not found.")
-        history = chat_service.db.get_chat_history(session_id=session_id, tenant_id=tenant_id)
+        history = chat_service.db.get_chat_history(session_id=session_id, box_id=box_id)
         return {"status": "success", "history": history}
     except HTTPException:
         raise
@@ -110,16 +110,16 @@ async def get_chat_history(
 async def rename_chat_session(
     session_id: str,
     request: RenameSessionRequest,
-    tenant_id: str,
+    box_id: str,
     chat_service: ChatService = Depends(get_chat_service),
     user: UserContext = Depends(get_current_user),
 ):
-    if not verify_workspace_access(tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this box.")
     title = request.title.strip()
     if not title:
         raise HTTPException(status_code=422, detail="A conversation title is required.")
-    if not chat_service.db.rename_chat_session(session_id, tenant_id, title[:120]):
+    if not chat_service.db.rename_chat_session(session_id, box_id, title[:120]):
         raise HTTPException(status_code=404, detail="Chat session not found.")
     return {"status": "success", "title": title[:120]}
 
@@ -127,14 +127,14 @@ async def rename_chat_session(
 @router.delete("/sessions/{session_id}")
 async def delete_chat_session(
     session_id: str,
-    tenant_id: str,
+    box_id: str,
     chat_service: ChatService = Depends(get_chat_service),
     user: UserContext = Depends(get_current_user),
 ):
-    if not verify_workspace_access(tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this box.")
     try:
-        if not chat_service.db.delete_chat_session(session_id, tenant_id):
+        if not chat_service.db.delete_chat_session(session_id, box_id):
             raise HTTPException(status_code=404, detail="Chat session not found.")
         return {"status": "success"}
     except HTTPException:
@@ -153,14 +153,14 @@ async def chat_with_documents(
     user: UserContext = Depends(get_current_user),
 ):
     """The main chat engine. Automatically reads history and saves new messages."""
-    if not verify_workspace_access(chat_request.tenant_id, user.user_id):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace.")
+    if not verify_box_access(chat_request.box_id, user.user_id):
+        raise HTTPException(status_code=403, detail="Access denied to this box.")
     try:
-        if not chat_service.db.session_belongs_to_tenant(chat_request.session_id, chat_request.tenant_id):
+        if not chat_service.db.session_belongs_to_box(chat_request.session_id, chat_request.box_id):
             raise HTTPException(status_code=404, detail="Chat session not found.")
         response = chat_service.ask_question(
             question=chat_request.question,
-            tenant_id=chat_request.tenant_id,
+            box_id=chat_request.box_id,
             session_id=chat_request.session_id,
         )
         return response
