@@ -21,20 +21,10 @@ export async function login(formData: FormData) {
 
   revalidatePath('/', 'layout')
   
-  // After login, check if the user has a workspace
+  // After login, we guarantee a workspace exists via DB trigger, so go straight to chat
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
-      const { data: members } = await supabase
-          .from('workspace_members')
-          .select('workspace_id')
-          .eq('user_id', user.id)
-          .limit(1)
-          
-      if (members && members.length > 0) {
-          redirect('/workspace/chat')
-      } else {
-          redirect('/onboarding')
-      }
+      redirect('/workspace/chat')
   } else {
       redirect('/login?message=Authentication failed')
   }
@@ -72,8 +62,8 @@ export async function signup(formData: FormData) {
     redirect(`/signup?message=${encodeURIComponent(error.message)}`)
   }
 
-  // After signup, user goes to onboarding to create a workspace
-  redirect('/onboarding')
+  // After signup, the DB trigger auto-creates a workspace, so go straight to chat
+  redirect('/workspace/chat')
 }
 
 export async function signInWithGoogle() {

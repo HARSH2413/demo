@@ -177,7 +177,9 @@ function KnowledgeBaseView({
 
 // ── Main Dashboard ──
 
-export default function SecureBrainDashboard({ tenantId }: { tenantId: string }) {
+export default function SecureBrainDashboard({ workspaces }: { workspaces: { id: string, name: string }[] }) {
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(workspaces[0]?.id || "");
+  const tenantId = activeWorkspaceId;
   const [activeDoc, setActiveDoc] = useState<{ title: string, content: string, fileUrl?: string } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -185,7 +187,7 @@ export default function SecureBrainDashboard({ tenantId }: { tenantId: string })
   const [isUploading, setIsUploading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentView, setCurrentView] = useState<'chat' | 'documents'>('chat');
-  const [localFiles, setLocalFiles] = useState<Record<string, string>>({});
+
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recentChats, setRecentChats] = useState<ChatSession[]>([]);
@@ -208,14 +210,28 @@ export default function SecureBrainDashboard({ tenantId }: { tenantId: string })
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     
-    const headers = new Headers(options?.headers);
+    const fetchHeaders: Record<string, string> = {};
+    if (options?.headers) {
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((value, key) => { fetchHeaders[key] = value; });
+      } else {
+        Object.assign(fetchHeaders, options.headers);
+      }
+    }
+    
     if (session?.access_token) {
-      headers.set('Authorization', `Bearer ${session.access_token}`);
+      fetchHeaders['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
+    // Fix: If body is FormData, let the browser automatically set Content-Type with boundary
+    if (options?.body instanceof FormData) {
+      delete fetchHeaders['Content-Type'];
+      delete fetchHeaders['content-type'];
     }
 
     const res = await fetch(`${API_URL}${path}`, {
       ...options,
-      headers
+      headers: fetchHeaders
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({ detail: "Unknown error" }));
@@ -281,7 +297,7 @@ export default function SecureBrainDashboard({ tenantId }: { tenantId: string })
       }
     };
     loadHistory();
-  }, [sessionId, apiFetch, showToast]);
+  }, [sessionId, tenantId, apiFetch, showToast]);
 
   const uploadFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
@@ -365,7 +381,7 @@ export default function SecureBrainDashboard({ tenantId }: { tenantId: string })
         ]);
         window.setTimeout(fetchDocuments, 4000);
       }
-    } catch (err) {
+    } catch {
       // Errors handled by apiFetch
     } finally {
       setIsSyncing(false);
@@ -441,6 +457,21 @@ export default function SecureBrainDashboard({ tenantId }: { tenantId: string })
           </div>
           <span className="font-bold text-xl tracking-tight text-slate-800">ActionRAG</span>
         </div>
+
+        {workspaces && workspaces.length > 0 && (
+          <div className="px-6 mb-6">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2 block">Active Workspace</label>
+            <select 
+              value={activeWorkspaceId} 
+              onChange={(e) => setActiveWorkspaceId(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none font-semibold transition-all hover:border-indigo-300 appearance-none cursor-pointer"
+            >
+              {workspaces.map(ws => (
+                <option key={ws.id} value={ws.id}>{ws.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <button onClick={() => { setMessages([]); setSessionId(null); setCurrentView('chat'); }} className="mx-6 mb-8 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100">
           <Plus size={18} /> New Investigation

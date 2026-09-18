@@ -11,6 +11,7 @@ To swap models, change RERANKER_MODEL_NAME in your .env:
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 from app.interfaces.reranker import IReranker
 from app.core.logger import logger
+import math
 
 
 class FastEmbedRerankerAdapter(IReranker):
@@ -38,10 +39,16 @@ class FastEmbedRerankerAdapter(IReranker):
         scored_docs = []
         for score_entry, doc in zip(scores, documents):
             if isinstance(score_entry, float):
-                score = score_entry
+                raw_score = score_entry
             else:
-                score = float(score_entry.score)
-            enriched = {**doc, "rerank_score": score}
+                raw_score = float(getattr(score_entry, 'score', score_entry))
+            
+            # MiniLM models output raw logits, which can be negative. 
+            # Apply a sigmoid function to normalize to a probability [0.0, 1.0] 
+            # so it works cleanly with our relevance thresholds.
+            normalized_score = 1.0 / (1.0 + math.exp(-raw_score))
+            
+            enriched = {**doc, "rerank_score": normalized_score}
             scored_docs.append(enriched)
 
         # Sort by cross-encoder score (highest = most relevant)

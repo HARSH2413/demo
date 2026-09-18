@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 from pydantic import BaseModel
 from typing import Optional
+from cachetools import TTLCache
 from app.core.config import settings
 from app.core.logger import logger
 from app.core.dependencies import _get_db_adapter
@@ -14,27 +15,35 @@ class UserContext(BaseModel):
     email: str
     role: Optional[str] = None
 
+# Cache valid tokens for 5 minutes to avoid hitting Supabase API repeatedly
+_token_cache = TTLCache(maxsize=1000, ttl=300)
+
 def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> UserContext:
-    """Verifies the Supabase JWT token and extracts user information."""
+    """Verifies the Supabase JWT token and extracts user information securely using the Supabase SDK."""
     token = credentials.credentials
+    
+    if token in _token_cache:
+        return _token_cache[token]
+        
     try:
-        # Supabase uses HS256 algorithm by default for its JWTs
-        payload = jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated"
+        db = _get_db_adapter()
+        # This calls Supabase's auth service, verifying the token securely via Supabase's own API
+        # This automatically handles asymmetric keys (ES256, RS256) and symmetric keys (HS256)
+        user_resp = db.client.auth.get_user(token)
+        
+        if not user_resp or not user_resp.user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+            
+        user = user_resp.user
+        ctx = UserContext(
+            user_id=user.id,
+            email=user.email,
+            role=user.role
         )
         
-        return UserContext(
-            user_id=payload.get("sub"),
-            email=payload.get("email", ""),
-            role=payload.get("role")
-        )
-    except jwt.ExpiredSignatureError:
-        logger.warning("Expired JWT token")
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError as e:
+        _token_cache[token] = ctx
+        return ctx
+    except Exception as e:
         logger.warning(f"Invalid JWT token: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 

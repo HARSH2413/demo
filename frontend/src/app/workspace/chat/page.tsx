@@ -11,21 +11,24 @@ export default async function WorkspaceChatPage() {
       redirect('/login')
   }
 
-  // Get user's first workspace
+  // Get user's workspaces
   const { data: members, error } = await supabase
       .from('workspace_members')
-      .select('workspace_id')
+      .select('workspace_id, workspaces(name)')
       .eq('user_id', user.id)
-      .limit(1)
 
   if (error || !members || members.length === 0) {
       // User has no workspace, send to onboarding
       redirect('/onboarding')
   }
 
-  const tenantId = members[0].workspace_id
+  // Format workspaces for the dashboard
+  const workspaces = members.map(m => ({
+    id: m.workspace_id,
+    name: m.workspaces.name || 'Unknown Workspace'
+  }))
 
   return (
-    <SecureBrainDashboard tenantId={tenantId} />
+    <SecureBrainDashboard workspaces={workspaces} />
   )
 }

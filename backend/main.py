@@ -5,7 +5,7 @@ Config-driven, resilient, and future-proof.
 Swap models and services by editing .env, not code.
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -61,6 +61,20 @@ app = FastAPI(
 # Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Incoming request: {request.method} {request.url}")
+    logger.info(f"Headers: {request.headers}")
+    try:
+        response = await call_next(request)
+        if response.status_code >= 400:
+            logger.error(f"Response status: {response.status_code}")
+        return response
+    except Exception as e:
+        logger.error(f"Exception during request: {e}")
+        raise
+
 
 # CORS — reads allowed origins from config
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
