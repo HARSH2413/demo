@@ -41,3 +41,8 @@ class IVectorStore(ABC):
     def get_neighboring_chunks(self, document_id: str, chunk_index: int, limit: int = 5) -> list[dict]:
         """Fetches neighboring chunks purely based on chunk_index."""
         pass
+
+    @abstractmethod
+    def get_multi_neighboring_chunks(self, requests: list[dict], limit: int = 5) -> dict[str, list[dict]]:
+        """Bulk fetches neighboring chunks for multiple documents to avoid N+1 queries."""
+        pass

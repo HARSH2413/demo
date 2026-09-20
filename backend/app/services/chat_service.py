@@ -14,13 +14,14 @@ Uses interfaces (IVectorStore, IEmbedder, ILLM, IReranker) so swapping
 adapters requires zero changes here — just update .env.
 """
 import time
-from typing import Optional
 from app.interfaces.vector_store import IVectorStore
 from app.interfaces.embedder import IEmbedder
 from app.interfaces.llm import ILLM
 from app.interfaces.reranker import IReranker
 from app.core.logger import logger
 from app.core.config import settings
+from app.services.retrieval_engine import RetrievalEngine
+from app.services.evidence_engine import EvidenceEngine
 
 
 class ChatService:
@@ -52,17 +53,22 @@ class ChatService:
         self.enable_multi_query = enable_multi_query
         self.enable_neighbor_context = enable_neighbor_context
 
-    def _get_doc_relevance_score(self, doc: dict) -> float:
-        """
-        Returns the best available relevance score for a document.
-
-        Priority:
-        1) Cross-encoder score (`rerank_score`) when available
-        2) Vector/Hybrid score (`similarity`) as fallback
-        """
-        if "rerank_score" in doc and doc.get("rerank_score") is not None:
-            return float(doc.get("rerank_score", 0.0))
-        return float(doc.get("similarity", 0.0))
+        self.retrieval_engine = RetrievalEngine(
+            db=db,
+            embedder=embedder,
+            llm=llm,
+            reranker=reranker,
+            retrieval_top_k=retrieval_top_k,
+            reranker_top_k=reranker_top_k,
+            enable_hyde=enable_hyde,
+            enable_multi_query=enable_multi_query,
+        )
+        self.evidence_engine = EvidenceEngine(
+            db=db,
+            min_relevance_score=min_relevance_score,
+            min_relevance_score_low=min_relevance_score_low,
+            enable_neighbor_context=enable_neighbor_context,
+        )
 
     def ask_question(self, question: str, box_id: str, session_id: str) -> dict:
         total_start = time.perf_counter()
@@ -93,29 +99,25 @@ class ChatService:
 
         # 4-8. Retrieval Pipeline (normal pass)
         retrieval_start = time.perf_counter()
-        retrieved_docs = self._retrieve_documents(search_query=search_query, box_id=box_id)
+        retrieved_docs = self.retrieval_engine.retrieve_documents(search_query=search_query, box_id=box_id)
+        retrieved_docs = self.evidence_engine.filter_and_expand(retrieved_docs)
         retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
 
         # 9. Confidence detection (normal pass)
-        confidence_level = self._determine_confidence(retrieved_docs)
+        confidence_level = self.evidence_engine.determine_confidence(retrieved_docs)
         rescue_used = False
 
         # 9b. Accuracy rescue pass: retry once only when evidence is genuinely weak.
-        if self._should_run_accuracy_rescue(confidence_level, retrieved_docs):
+        if self.evidence_engine.should_run_accuracy_rescue(confidence_level, retrieved_docs):
             rescue_start = time.perf_counter()
-            rescue_docs = self._retrieve_documents(
-                search_query=search_query,
-                box_id=box_id,
-                force_hyde=True,
-                force_multi_query=True,
-                retrieval_limit=max(self.retrieval_top_k, self.retrieval_top_k + 10),
-            )
+            rescue_docs = self.retrieval_engine.execute_accuracy_rescue(search_query=search_query, box_id=box_id)
+            rescue_docs = self.evidence_engine.filter_and_expand(rescue_docs)
             rescue_ms = (time.perf_counter() - rescue_start) * 1000
-            rescue_confidence = self._determine_confidence(rescue_docs)
+            rescue_confidence = self.evidence_engine.determine_confidence(rescue_docs)
 
             rank = {"low": 0, "medium": 1, "multi_source": 2, "high": 3}
-            current_top = max((self._get_doc_relevance_score(doc) for doc in retrieved_docs), default=0.0)
-            rescue_top = max((self._get_doc_relevance_score(doc) for doc in rescue_docs), default=0.0)
+            current_top = max((self.evidence_engine.get_doc_relevance_score(doc) for doc in retrieved_docs), default=0.0)
+            rescue_top = max((self.evidence_engine.get_doc_relevance_score(doc) for doc in rescue_docs), default=0.0)
 
             should_use_rescue = (
                 rank.get(rescue_confidence, 0) > rank.get(confidence_level, 0)
@@ -149,7 +151,7 @@ class ChatService:
         # Retrieval may intentionally keep weak matches so users can inspect them,
         # but they are not evidence strong enough to answer an unrelated question.
         fallback_phrase = "I could not find the answer to this in the provided company documents."
-        top_score = max((self._get_doc_relevance_score(doc) for doc in retrieved_docs), default=0.0)
+        top_score = max((self.evidence_engine.get_doc_relevance_score(doc) for doc in retrieved_docs), default=0.0)
         if not retrieved_docs or top_score < settings.ANSWER_MIN_RELEVANCE_SCORE:
             logger.info(
                 f"Grounded-answer gate blocked response | top_score={top_score:.3f} "
@@ -169,18 +171,7 @@ class ChatService:
             }
 
         # 10. Context Builder (labeled, isolated, with relevance scores)
-        context_parts = []
-        for doc in retrieved_docs:
-            score_label = ""
-            if "rerank_score" in doc:
-                score_label = f" [relevance: {doc['rerank_score']:.2f}]"
-            neighbor_label = " [+ neighboring context]" if doc.get("has_neighbor_context") else ""
-            context_parts.append(
-                f"--- START OF SOURCE: {doc['filename']}{score_label}{neighbor_label} ---\n"
-                f"{doc['content']}\n"
-                f"--- END OF SOURCE: {doc['filename']} ---"
-            )
-        context_text = "\n\n".join(context_parts)
+        context_text = self.evidence_engine.build_context_text(retrieved_docs)
 
         # 11. Structured logging
         logger.info(f"Chat query | box={box_id} | session={session_id}")
@@ -263,264 +254,6 @@ class ChatService:
             "confidence": confidence_level,
         }
 
-    def _should_run_accuracy_rescue(self, confidence_level: str, docs: list[dict]) -> bool:
-        """
-        Runs rescue pass only when first-pass evidence is genuinely weak.
-
-        This preserves accuracy while avoiding unnecessary duplicate expensive retrieval.
-        """
-        if not docs:
-            return True
-
-        top_score = max((self._get_doc_relevance_score(doc) for doc in docs), default=0.0)
-
-        if top_score < max(0.12, self.min_relevance_score_low):
-            return True
-
-        if len(docs) == 1 and top_score < max(0.25, self.min_relevance_score):
-            return True
-
-        if confidence_level == "low" and top_score < 0.25 and len(docs) < 2:
-            return True
-
-        return False
-
-    # ══════════════════════════════════════════════
-    # ✨ NEW: Advanced Retrieval Strategies
-    # ══════════════════════════════════════════════
-
-    def _build_search_queries(
-        self,
-        search_query: str,
-        use_hyde: Optional[bool] = None,
-        use_multi_query: Optional[bool] = None,
-    ) -> list[str]:
-        """
-        Generates multiple search queries for improved retrieval.
-
-        1. Original query (always included)
-        2. HyDE — hypothetical document embedding
-        3. Multi-query — LLM-generated variations
-        """
-        queries = [search_query]
-        use_hyde = self.enable_hyde if use_hyde is None else use_hyde
-        use_multi_query = self.enable_multi_query if use_multi_query is None else use_multi_query
-
-        # HyDE: Generate a hypothetical answer and use IT for embedding search
-        if use_hyde:
-            try:
-                hypothetical = self.llm.generate_response(
-                    system_prompt=(
-                        "You are a helpful assistant. Given a question, write a short paragraph (2-3 sentences) "
-                        "that would answer this question, as if quoting from an internal company document. "
-                        "Be specific and factual-sounding. Output ONLY the paragraph."
-                    ),
-                    user_prompt=search_query,
-                    temperature=0.0,
-                )
-                if hypothetical and len(hypothetical) > 20:
-                    queries.append(hypothetical)
-                    logger.info(f"HyDE generated hypothetical answer ({len(hypothetical)} chars)")
-            except Exception as e:
-                logger.warning(f"HyDE generation failed: {e}")
-
-        # Multi-Query: Generate alternative phrasings
-        if use_multi_query:
-            try:
-                alternatives = self.llm.generate_response(
-                    system_prompt=(
-                        "You are a search query optimizer. Given a question, generate 2 alternative "
-                        "phrasings that might retrieve different relevant documents. "
-                        "Output ONLY the 2 queries, one per line, no numbering or bullets."
-                    ),
-                    user_prompt=search_query,
-                    temperature=0.3,
-                )
-                if alternatives:
-                    for alt in alternatives.strip().split("\n"):
-                        alt = alt.strip().strip("-").strip("•").strip()
-                        if alt and len(alt) > 10 and len(alt) < 300:
-                            queries.append(alt)
-                    logger.info(f"Multi-query generated {len(queries)-1} alternative queries")
-            except Exception as e:
-                logger.warning(f"Multi-query generation failed: {e}")
-
-        return queries
-
-    def _multi_query_search(
-        self,
-        queries: list[str],
-        original_query: str,
-        box_id: str,
-        retrieval_limit: Optional[int] = None,
-    ) -> list[dict]:
-        """
-        Searches with multiple queries and merges results with deduplication.
-
-        Each query's results are combined; duplicates (same content) are removed,
-        keeping the highest similarity score.
-        """
-        all_docs = {}  # key: content hash, value: doc dict
-        search_limit = retrieval_limit or self.retrieval_top_k
-
-        for query in queries:
-            try:
-                query_vector = self.embedder.embed_text([query])[0]
-                docs = self.db.search_similar(
-                    query_vector=query_vector,
-                    query_text=original_query,  # Always use original for keyword search
-                    box_id=box_id,
-                    limit=search_limit,
-                )
-                for doc in docs:
-                    # Deduplicate by content (keep highest similarity)
-                    content_key = doc.get("content", "")[:100]
-                    existing = all_docs.get(content_key)
-                    if not existing or doc.get("similarity", 0) > existing.get("similarity", 0):
-                        all_docs[content_key] = doc
-            except Exception as e:
-                logger.error(f"Search failed for query variant: {e}")
-
-        merged = list(all_docs.values())
-        logger.info(f"Multi-query search: {len(queries)} queries → {len(merged)} unique docs")
-        return merged
-
-    def _retrieve_documents(
-        self,
-        search_query: str,
-        box_id: str,
-        force_hyde: Optional[bool] = None,
-        force_multi_query: Optional[bool] = None,
-        retrieval_limit: Optional[int] = None,
-    ) -> list[dict]:
-        """Runs full retrieval stack and returns filtered/enriched documents."""
-        search_queries = self._build_search_queries(
-            search_query=search_query,
-            use_hyde=force_hyde,
-            use_multi_query=force_multi_query,
-        )
-
-        retrieved_docs = self._multi_query_search(
-            queries=search_queries,
-            original_query=search_query,
-            box_id=box_id,
-            retrieval_limit=retrieval_limit,
-        )
-
-        if retrieved_docs and self.reranker:
-            try:
-                retrieved_docs = self.reranker.rerank(
-                    query=search_query,
-                    documents=retrieved_docs,
-                    top_k=self.reranker_top_k,
-                )
-                logger.info(f"Re-ranked → top {len(retrieved_docs)} docs")
-            except Exception as e:
-                logger.warning(f"Re-ranking failed, using original order: {e}")
-                retrieved_docs = retrieved_docs[:self.reranker_top_k]
-
-        retrieved_docs = self._dynamic_relevance_filter(retrieved_docs)
-
-        if self.enable_neighbor_context and retrieved_docs:
-            retrieved_docs = self._expand_with_neighbors(retrieved_docs)
-
-        return retrieved_docs
-
-    def _dynamic_relevance_filter(self, docs: list) -> list:
-        """
-        Filters docs by relevance score with dynamic threshold.
-
-        If fewer than 2 docs survive the normal threshold, falls back to
-        a lower threshold to avoid returning nothing on partial matches.
-        """
-        if not docs:
-            return docs
-
-        # First pass: normal threshold
-        filtered = [
-            doc for doc in docs
-            if self._get_doc_relevance_score(doc) >= self.min_relevance_score
-        ]
-
-        # If we filtered too aggressively, try with lower threshold
-        if len(filtered) < 2:
-            filtered = [
-                doc for doc in docs
-                if self._get_doc_relevance_score(doc) >= self.min_relevance_score_low
-            ]
-            if len(filtered) > len(docs):
-                filtered = docs  # Shouldn't happen, but safety check
-            logger.info(
-                f"Dynamic threshold: {self.min_relevance_score} → {self.min_relevance_score_low} "
-                f"({len(docs)} → {len(filtered)} docs)"
-            )
-        else:
-            filtered_count = len(docs) - len(filtered)
-            if filtered_count > 0:
-                logger.info(f"Filtered out {filtered_count} low-relevance docs (threshold={self.min_relevance_score})")
-
-        return filtered
-
-    def _expand_with_neighbors(self, docs: list) -> list:
-        """
-        Expands retrieved chunks with neighboring context from the same document.
-
-        For each matched chunk, fetches adjacent chunks from the same file
-        and appends their content, giving the LLM more surrounding context.
-        """
-        expanded = []
-        seen_filenames = set()
-
-        for doc in docs:
-            filename = doc.get("filename", "")
-
-            # Only expand once per unique filename to avoid bloat
-            if filename in seen_filenames or not filename:
-                expanded.append(doc)
-                continue
-
-            seen_filenames.add(filename)
-
-            try:
-                document_id = doc.get("document_id")
-                chunk_index = doc.get("chunk_index")
-                
-                if document_id is None or chunk_index is None:
-                    expanded.append(doc)
-                    continue
-
-                neighbors = self.db.get_neighboring_chunks(
-                    document_id=document_id,
-                    chunk_index=chunk_index,
-                    limit=5,
-                )
-
-                if neighbors and len(neighbors) > 1:
-                    # Combine neighbor content (excluding the matched chunk itself)
-                    neighbor_texts = []
-                    for n in neighbors:
-                        n_content = n.get("content", "")
-                        if n_content and n_content[:100] != doc.get("content", "")[:100]:
-                            neighbor_texts.append(n_content)
-
-                    if neighbor_texts:
-                        expanded_content = (
-                            doc["content"] + "\n\n"
-                            "[SURROUNDING CONTEXT FROM SAME DOCUMENT]\n" +
-                            "\n---\n".join(neighbor_texts[:2])  # Max 2 neighbors
-                        )
-                        enriched_doc = {**doc, "content": expanded_content, "has_neighbor_context": True}
-                        expanded.append(enriched_doc)
-                        logger.debug(f"Expanded '{filename}' with {len(neighbor_texts[:2])} neighbor chunks")
-                        continue
-
-            except Exception as e:
-                logger.warning(f"Neighbor expansion failed for '{filename}': {e}")
-
-            expanded.append(doc)
-
-        return expanded
-
     # ══════════════════════════════════════════════
     # ✨ NEW: Chat History Condensation
     # ══════════════════════════════════════════════
@@ -570,32 +303,6 @@ class ChatService:
     # ══════════════════════════════════════════════
     # Confidence & Prompt Building
     # ══════════════════════════════════════════════
-
-    def _determine_confidence(self, docs: list) -> str:
-        """
-        Classifies retrieval confidence with multi-source detection.
-
-        Returns: 'high', 'multi_source', 'medium', or 'low'
-        """
-        if not docs:
-            return "low"
-
-        scores = [self._get_doc_relevance_score(doc) for doc in docs]
-        top_score = max(scores)
-        unique_files = set(doc.get("filename", "") for doc in docs)
-
-        # Multi-source: top docs come from different files with varying scores
-        if len(unique_files) >= 3 and top_score >= 0.5:
-            score_spread = max(scores) - min(scores)
-            if score_spread > 0.3:
-                return "multi_source"
-
-        if top_score >= 0.7:
-            return "high"
-        elif top_score >= 0.3:
-            return "medium"
-        else:
-            return "low"
 
     def _build_system_prompt(
         self, context_text: str, fallback_phrase: str, confidence_level: str

@@ -272,8 +272,58 @@ class SupabaseAdapter(IVectorStore):
             )
             return response.data
         except Exception as e:
-            logger.error(f"Failed to fetch neighboring chunks for doc='{document_id}': {e}")
             return []
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase get_multi_neighboring_chunks retry (attempt {rs.attempt_number})"),
+    )
+    def get_multi_neighboring_chunks(self, requests: list[dict], limit: int = 5) -> dict[str, list[dict]]:
+        """
+        Bulk fetches neighboring chunks for multiple documents in batches to avoid N+1 queries.
+        Returns a dict mapping document_id to a list of its neighboring chunks.
+        """
+        if not requests:
+            return {}
+
+        results = {}
+        half_limit = limit // 2
+        
+        # Process in batches of 10 to avoid URL length limits on GET requests
+        batch_size = 10
+        for i in range(0, len(requests), batch_size):
+            batch = requests[i:i+batch_size]
+            or_conditions = []
+            
+            for req in batch:
+                doc_id = req["document_id"]
+                c_idx = req["chunk_index"]
+                min_idx = max(0, c_idx - half_limit)
+                max_idx = c_idx + half_limit
+                or_conditions.append(f"and(document_id.eq.{doc_id},chunk_index.gte.{min_idx},chunk_index.lte.{max_idx})")
+                
+            or_str = ",".join(or_conditions)
+            
+            try:
+                response = (
+                    self.client.table("document_chunks")
+                    .select("id, document_id, content, chunk_index, page_start, page_end")
+                    .or_(or_str)
+                    .order("chunk_index")
+                    .execute()
+                )
+                
+                for row in response.data:
+                    doc_id = row["document_id"]
+                    if doc_id not in results:
+                        results[doc_id] = []
+                    results[doc_id].append(row)
+            except Exception as e:
+                logger.error(f"Failed to fetch multi neighboring chunks batch: {e}")
+                
+        return results
 
     # ── Box Operations (Phase 1A) ──
 

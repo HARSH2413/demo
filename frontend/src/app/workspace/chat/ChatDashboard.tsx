@@ -258,8 +258,15 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
       if (data.documents) {
         setDocuments((previous) => {
           const indexed = data.documents.map((document: DocumentRecord) => ({ ...document, status: 'indexed' as const }));
-          const pending = previous.filter((document) => document.status === 'processing' && !indexed.some((item: DocumentRecord) => item.filename === document.filename));
-          return [...pending, ...indexed];
+          const failedDocs = previous.filter((document) => document.status === 'processing' && !indexed.some((item: DocumentRecord) => item.filename === document.filename));
+          
+          if (failedDocs.length > 0) {
+            setTimeout(() => {
+              failedDocs.forEach(doc => showToast(`Indexing failed for ${doc.filename}.`, 'error'));
+            }, 0);
+          }
+          
+          return indexed;
         });
       } else if (data.files) {
         setDocuments(data.files.map((filename: string) => ({ filename, status: 'indexed' })));
@@ -317,7 +324,7 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
       formData.append('file', file);
       formData.append('box_id', boxId);
       try {
-        const data = await apiFetch('/api/v1/upload/', { method: 'POST', body: formData });
+        const data = await apiFetch('/api/v1/upload/box', { method: 'POST', body: formData });
         showToast(data.message, 'success');
       } catch {
         setDocuments((previous) => previous.map((document) => document.filename === file.name ? { ...document, status: 'failed' } : document));

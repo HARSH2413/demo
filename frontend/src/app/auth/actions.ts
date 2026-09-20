@@ -87,7 +87,7 @@ export async function signInWithGoogle() {
   }
 }
 
-export async function createWorkspace(formData: FormData) {
+export async function createBox(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -95,12 +95,12 @@ export async function createWorkspace(formData: FormData) {
       redirect('/login')
   }
 
-  const workspaceName = formData.get('workspaceName') as string
+  const boxName = formData.get('boxName') as string
 
   // Insert box (RLS allows user_id = auth.uid())
   const { data: box, error: boxError } = await supabase
       .from('boxes')
-      .insert({ name: workspaceName, user_id: user.id })
+      .insert({ name: boxName, user_id: user.id })
       .select('id')
       .single()
 
