@@ -154,6 +154,12 @@ class EvidenceEngine:
 
         return False
 
+    def assign_evidence_ids(self, docs: list[dict]) -> list[dict]:
+        """Assigns deterministic evidence IDs [E1], [E2] to the filtered documents."""
+        for i, doc in enumerate(docs):
+            doc["evidence_id"] = f"[E{i+1}]"
+        return docs
+
     def build_context_text(self, docs: list[dict]) -> str:
         context_parts = []
         for doc in docs:
@@ -161,9 +167,12 @@ class EvidenceEngine:
             if "rerank_score" in doc:
                 score_label = f" [relevance: {doc['rerank_score']:.2f}]"
             neighbor_label = " [+ neighboring context]" if doc.get("has_neighbor_context") else ""
+            
+            evidence_id = doc.get("evidence_id", "[E?]")
             context_parts.append(
-                f"--- START OF SOURCE: {doc['filename']}{score_label}{neighbor_label} ---\n"
-                f"{doc['content']}\n"
-                f"--- END OF SOURCE: {doc['filename']} ---"
+                f"--- EVIDENCE {evidence_id} ---\n"
+                f"Source: {doc['filename']}{score_label}{neighbor_label}\n"
+                f"Content: {doc['content']}\n"
+                f"----------------------"
             )
         return "\n\n".join(context_parts)

@@ -14,6 +14,7 @@ Uses interfaces (IVectorStore, IEmbedder, ILLM, IReranker) so swapping
 adapters requires zero changes here — just update .env.
 """
 import time
+import re
 from app.interfaces.vector_store import IVectorStore
 from app.interfaces.embedder import IEmbedder
 from app.interfaces.llm import ILLM
@@ -171,6 +172,7 @@ class ChatService:
             }
 
         # 10. Context Builder (labeled, isolated, with relevance scores)
+        retrieved_docs = self.evidence_engine.assign_evidence_ids(retrieved_docs)
         context_text = self.evidence_engine.build_context_text(retrieved_docs)
 
         # 11. Structured logging
@@ -230,13 +232,24 @@ class ChatService:
         # 19. Citation Builder (with re-rank scores)
         citations = []
         if fallback_phrase not in answer:
+            # Parse [E<number>] references from the answer
+            used_evidence_ids = set(re.findall(r'\[E\d+\]', answer))
+            
             for doc in retrieved_docs:
-                citations.append({
-                    "filename": doc["filename"],
-                    "content": doc["content"],
-                    "similarity": doc.get("similarity", 0.0),
-                    "rerank_score": doc.get("rerank_score", None),
-                })
+                evidence_id = doc.get("evidence_id")
+                if evidence_id in used_evidence_ids:
+                    citations.append({
+                        "evidence_id": evidence_id,
+                        "document_id": doc.get("document_id"),
+                        "filename": doc.get("filename", ""),
+                        "chunk_index": doc.get("chunk_index"),
+                        "page_start": doc.get("page_start"),
+                        "page_end": doc.get("page_end"),
+                        "section_title": doc.get("section_title"),
+                        "content": doc.get("content", ""),
+                        "similarity": doc.get("similarity", 0.0),
+                        "rerank_score": doc.get("rerank_score", None),
+                    })
 
         total_ms = (time.perf_counter() - total_start) * 1000
         logger.info(
@@ -333,8 +346,7 @@ Reply with EXACTLY this phrase and nothing else: "{fallback_phrase}" """
         if settings.ENABLE_STRUCTURED_ANSWERS:
             structure_instruction = (
                 "OUTPUT STRUCTURE: Use this structure when relevant: "
-                "## Direct Answer, ## Detailed Explanation, ## Evidence by Source, ## Gaps or Unknowns. "
-                "In 'Evidence by Source', cite filenames from the context and map each major claim to at least one source."
+                "## Direct Answer, ## Detailed Explanation, ## Evidence by Source, ## Gaps or Unknowns."
             )
         else:
             structure_instruction = (
@@ -358,10 +370,11 @@ INSTRUCTIONS:
 2. {confidence_instruction}
 3. DETAIL LEVEL: {detail_instruction}
 4. {structure_instruction}
-5. SOURCE ISOLATION: The CONTEXT is divided by filenames (e.g., '--- START OF SOURCE: filename.pdf ---').
+5. EVIDENCE CITATION: The CONTEXT is divided into numbered evidence blocks (e.g., '--- EVIDENCE [E1] ---').
+   - You MUST base your factual claims ONLY on this supplied evidence.
+   - You MUST cite the supporting evidence IDs in your answer using the format [E1], [E2], etc.
    - If the user asks about a specific document, ONLY use facts from that file's sections.
-   - Sources with higher [relevance] scores are more likely to contain the answer — prioritize them.
-   - Sections marked [+ neighboring context] provide surrounding context from the same document for better understanding.
+   - If the evidence does not support a complete answer, explicitly state what is missing.
 6. SYNTHESIS: When multiple chunks from the SAME document are relevant, synthesize them into a coherent answer rather than repeating information.
 7. NATURAL STRUCTURE (FLEXIBLE): Write naturally and conversationally, using structure ONLY where it improves clarity:
    - For complex topics: Use clear paragraphs with descriptive headers (##, ###) where appropriate
