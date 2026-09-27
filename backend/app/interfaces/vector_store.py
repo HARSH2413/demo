@@ -6,6 +6,11 @@ class IVectorStore(ABC):
     def create_document(self, document: Dict[str, Any]) -> str:
         """Creates a parent document and returns its ID."""
         pass
+
+    @abstractmethod
+    def update_document_status(self, document_id: str, status: str, error_message: str = None) -> None:
+        """Updates the status and optional error message of a document."""
+        pass
         
     @abstractmethod
     def save_document_chunks(self, chunks: List[Dict[str, Any]]) -> int:

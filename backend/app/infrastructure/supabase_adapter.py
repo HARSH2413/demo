@@ -55,6 +55,19 @@ class SupabaseAdapter(IVectorStore):
         if not doc_response.data:
             raise RuntimeError("Failed to create document record.")
         return doc_response.data[0]["id"]
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase update_document_status retry (attempt {rs.attempt_number})"),
+    )
+    def update_document_status(self, document_id: str, status: str, error_message: str = None) -> None:
+        """Updates the processing status of a document."""
+        update_data = {"status": status}
+        if error_message is not None:
+            update_data["error_message"] = error_message
+        self.client.table("documents").update(update_data).eq("id", document_id).execute()
         
     @retry(
         stop=stop_after_attempt(3),
@@ -141,7 +154,7 @@ class SupabaseAdapter(IVectorStore):
         """Returns one record per document for the library UI."""
         response = (
             self.client.table("documents")
-            .select("id, filename, file_hash, created_at")
+            .select("id, filename, file_hash, created_at, status, error_message")
             .eq("box_id", box_id)
             .order("created_at", desc=True)
             .execute()
@@ -155,6 +168,8 @@ class SupabaseAdapter(IVectorStore):
                     "filename": filename,
                     "file_hash": row.get("file_hash"),
                     "created_at": row.get("created_at"),
+                    "status": row.get("status", "completed"), # Fallback to completed for older docs
+                    "error_message": row.get("error_message"),
                 }
         return list(documents.values())
 

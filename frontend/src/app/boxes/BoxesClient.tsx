@@ -22,9 +22,18 @@ export default function BoxesClient() {
   const [isCreating, setIsCreating] = useState(false);
   const [newBoxName, setNewBoxName] = useState('');
 
-  const apiFetch = useCallback(async (path: string, options?: RequestInit) => {
+  const apiFetch = useCallback(async (path: string, options?: RequestInit, isRetry = false): Promise<unknown> => {
     const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
+    
+    if (isRetry) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        window.location.href = '/login';
+        return new Promise(() => {});
+      }
+      session = refreshData.session;
+    }
     
     const fetchHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -41,9 +50,10 @@ export default function BoxesClient() {
     });
     
     if (!res.ok) {
-      if (res.status === 401) {
+      if (res.status === 401 && !isRetry) {
+        return apiFetch(path, options, true);
+      } else if (res.status === 401) {
         window.location.href = '/login';
-        // Return a promise that never resolves so we don't throw an error while redirecting
         return new Promise(() => {});
       }
       if (res.status === 403) {

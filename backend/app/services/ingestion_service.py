@@ -61,7 +61,7 @@ class IngestionService:
             ],
         )
 
-    def process_file_background(self, file_path: str, filename: str, file_hash: str, box_id: str):
+    def process_file_background(self, file_path: str, filename: str, file_hash: str, box_id: str, document_id: str):
         """
         Background worker for processing files of any size.
 
@@ -76,18 +76,22 @@ class IngestionService:
             file_type = self._detect_file_type(filename)
 
             if filename_lower.endswith(".pdf"):
-                self._process_pdf_streaming(file_path, filename, file_hash, box_id, file_type)
+                self._process_pdf_streaming(file_path, filename, file_hash, box_id, document_id, file_type)
             else:
-                self._process_small_file(file_path, filename, file_hash, box_id, file_type)
+                self._process_small_file(file_path, filename, file_hash, box_id, document_id, file_type)
+
+            # Successfully completed ingestion
+            self.db.update_document_status(document_id, "completed")
 
         except Exception as e:
             logger.error(f"Failed to process '{filename}': {e}")
+            raise e
         finally:
             if os.path.exists(file_path):
                 os.remove(file_path)
                 logger.debug(f"Cleaned up temp file: {file_path}")
 
-    def _process_pdf_streaming(self, file_path: str, filename: str, file_hash: str, box_id: str, file_type: str = "PDF"):
+    def _process_pdf_streaming(self, file_path: str, filename: str, file_hash: str, box_id: str, document_id: str, file_type: str = "PDF"):
         """Memory-safe PDF processing — pages in batches with block-based extraction."""
         doc = fitz.open(file_path)
         total_pages = doc.page_count
@@ -97,18 +101,6 @@ class IngestionService:
         failed_batches = 0
         all_text_for_summary = []  # Collect first pages for summary generation
         global_chunk_index = 1
-        
-        # 1. Create Parent Document
-        try:
-            document_id = self.db.create_document({
-                "box_id": box_id,
-                "filename": filename,
-                "file_hash": file_hash,
-                "mime_type": "application/pdf"
-            })
-        except Exception as e:
-            logger.error(f"Failed to create parent document for '{filename}': {e}")
-            raise e
 
         for page_start in range(0, total_pages, PDF_PAGE_BATCH_SIZE):
             page_end = min(page_start + PDF_PAGE_BATCH_SIZE, total_pages)
@@ -172,9 +164,6 @@ class IngestionService:
                 except Exception as e:
                     failed_batches += 1
                     logger.error(f"Failed batch for pages {page_start+1}-{page_end}: {e}")
-                    # ATOMICITY: Clean up on chunk failure
-                    logger.warning(f"Deleting parent document '{filename}' due to chunk failure.")
-                    self.db.delete_document(filename, box_id)
                     raise e
 
             del chunks
@@ -196,7 +185,7 @@ class IngestionService:
         else:
             logger.info(f"Successfully ingested '{filename}' | {total_pages} pages → {total_chunks_saved} chunks")
 
-    def _process_small_file(self, file_path: str, filename: str, file_hash: str, box_id: str, file_type: str = "Document"):
+    def _process_small_file(self, file_path: str, filename: str, file_hash: str, box_id: str, document_id: str, file_type: str = "Document"):
         """Standard processing for DOCX, TXT, CSV, and XLSX files."""
         raw_text = self._extract_text_from_disk(file_path, filename)
         logger.info(f"Extracted text from '{filename}' ({len(raw_text)} chars)")
@@ -207,18 +196,6 @@ class IngestionService:
         chunks = self.text_splitter.split_text(raw_text)
         total_chunks = len(chunks)
         logger.info(f"Split '{filename}' into {total_chunks} chunks")
-
-        # 1. Create Parent Document
-        try:
-            document_id = self.db.create_document({
-                "box_id": box_id,
-                "filename": filename,
-                "file_hash": file_hash,
-                "mime_type": "text/plain" # Simplified for this demo
-            })
-        except Exception as e:
-            logger.error(f"Failed to create parent document for '{filename}': {e}")
-            raise e
 
         # Generate document summary before deleting raw_text
         self._generate_document_summary(
@@ -263,9 +240,6 @@ class IngestionService:
             except Exception as e:
                 failed_batches += 1
                 logger.error(f"Failed batch {batch_num}/{total_batches} for '{filename}': {e}")
-                # ATOMICITY: Clean up on chunk failure
-                logger.warning(f"Deleting parent document '{filename}' due to chunk failure.")
-                self.db.delete_document(filename, box_id)
                 raise e
 
         if failed_batches > 0:

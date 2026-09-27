@@ -165,7 +165,7 @@ function KnowledgeBaseView({
                 <h4 className="font-bold text-sm truncate text-slate-800">{document.filename}</h4>
                 <p className="text-[10px] text-slate-400 mt-1">{fileType(document.filename)}{document.size ? ` · ${(document.size / 1024 / 1024).toFixed(1)} MB` : ''}{document.created_at ? ` · ${new Date(document.created_at).toLocaleDateString()}` : ''}</p>
                 <p className={`text-[10px] font-bold mt-2 uppercase tracking-tighter flex items-center gap-1 ${document.status === 'processing' ? 'text-amber-600' : document.status === 'failed' ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {document.status === 'processing' ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle2 size={10} />} {document.status === 'processing' ? 'Indexing' : document.status === 'failed' ? 'Failed' : 'Indexed'}
+                  {document.status === 'processing' ? <Loader2 size={10} className="animate-spin" /> : document.status === 'failed' ? <AlertCircle size={10} /> : <CheckCircle2 size={10} />} {document.status === 'processing' ? 'Indexing' : document.status === 'failed' ? 'Failed' : 'Indexed'}
                 </p>
               </div>
             </div>
@@ -256,27 +256,36 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
     try {
       const data = await apiFetch(`/api/v1/documents/?box_id=${boxId}`);
       if (data.documents) {
-        setDocuments((previous) => {
-          const indexed = data.documents.map((document: DocumentRecord) => ({ ...document, status: 'indexed' as const }));
-          const failedDocs = previous.filter((document) => document.status === 'processing' && !indexed.some((item: DocumentRecord) => item.filename === document.filename));
-          
-          if (failedDocs.length > 0) {
-            setTimeout(() => {
-              failedDocs.forEach(doc => showToast(`Indexing failed for ${doc.filename}.`, 'error'));
-            }, 0);
-          }
-          
-          return indexed;
-        });
+        setDocuments(data.documents);
       } else if (data.files) {
-        setDocuments(data.files.map((filename: string) => ({ filename, status: 'indexed' })));
+        // Fallback for older API versions without document objects
+        setDocuments(data.files.map((filename: string) => ({ filename, status: 'completed' as const })));
       }
     } catch {
       // apiFetch already displays a helpful error.
     }
   }, [apiFetch, boxId]);
 
-  useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+  // Initial fetch and polling effect
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
+
+  // Polling for processing documents
+  useEffect(() => {
+    const hasProcessing = documents.some(doc => doc.status === 'processing');
+    let timeoutId: number;
+
+    if (hasProcessing) {
+      timeoutId = window.setTimeout(() => {
+        fetchDocuments();
+      }, 3000);
+    }
+
+    return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [documents, fetchDocuments]);
 
   const fetchChatSessions = useCallback(async () => {
     try {
@@ -333,7 +342,6 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
 
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsUploading(false);
-    window.setTimeout(fetchDocuments, 4000);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => uploadFiles(event.target.files || []);
@@ -385,7 +393,6 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
           ...data.queued_files.filter((filename: string) => !prev.some(document => document.filename === filename)).map((filename: string) => ({ filename, status: 'processing' as const })),
           ...prev,
         ]);
-        window.setTimeout(fetchDocuments, 4000);
       }
     } catch {
       // Errors handled by apiFetch

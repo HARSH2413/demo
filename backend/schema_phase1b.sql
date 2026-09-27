@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS public.documents (
     file_hash TEXT NOT NULL,
     mime_type TEXT,
     summary TEXT,
+    status TEXT DEFAULT 'processing' CHECK (status IN ('processing', 'completed', 'failed')),
+    error_message TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     CONSTRAINT unique_document_hash_per_box UNIQUE (box_id, file_hash)

@@ -33,6 +33,8 @@ def create_box(
             description=data.description
         )
         return {"status": "success", "data": box}
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = str(e)
         if "boxes_user_name_lower_idx" in error_msg or "duplicate key" in error_msg or "idx_boxes_user_name_lower" in error_msg:
@@ -48,6 +50,8 @@ def list_boxes(
     try:
         boxes = box_service.list_boxes(user_id=user.user_id)
         return {"status": "success", "data": boxes}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Box listing failed: {e}")
         raise HTTPException(status_code=500, detail="Unable to list boxes.")
@@ -86,6 +90,8 @@ def update_box(
         if not box:
              raise HTTPException(status_code=404, detail="Box not found.")
         return {"status": "success", "data": box}
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = str(e)
         if "boxes_user_name_lower_idx" in error_msg or "duplicate key" in error_msg or "idx_boxes_user_name_lower" in error_msg:
@@ -106,6 +112,8 @@ def delete_box(
         if not success:
             raise HTTPException(status_code=404, detail="Box not found.")
         return {"status": "success", "message": "Box deleted."}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Box deletion failed: {e}")
         raise HTTPException(status_code=500, detail="Unable to delete box.")
