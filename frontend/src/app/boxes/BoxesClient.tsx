@@ -41,6 +41,14 @@ export default function BoxesClient() {
     });
     
     if (!res.ok) {
+      if (res.status === 401) {
+        window.location.href = '/login';
+        // Return a promise that never resolves so we don't throw an error while redirecting
+        return new Promise(() => {});
+      }
+      if (res.status === 403) {
+        throw new Error("Access denied.");
+      }
       const data = await res.json().catch(() => ({ detail: "Unknown error" }));
       throw new Error(data.detail || `HTTP ${res.status}`);
     }

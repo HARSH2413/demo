@@ -32,10 +32,12 @@ export async function updateSession(request: NextRequest) {
 
   // Protection logic:
   // Redirect unauthenticated users away from private routes
-  const isWorkspaceRoute = request.nextUrl.pathname.startsWith('/workspace')
-  const isOnboardingRoute = request.nextUrl.pathname.startsWith('/onboarding')
+  const isProtectedRoute = 
+    request.nextUrl.pathname.startsWith('/boxes') || 
+    request.nextUrl.pathname.startsWith('/workspace') || 
+    request.nextUrl.pathname.startsWith('/onboarding')
   
-  if (!user && (isWorkspaceRoute || isOnboardingRoute)) {
+  if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

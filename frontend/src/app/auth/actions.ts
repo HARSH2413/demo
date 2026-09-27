@@ -62,8 +62,13 @@ export async function signup(formData: FormData) {
     redirect(`/signup?message=${encodeURIComponent(error.message)}`)
   }
 
-  // After signup, go straight to boxes
-  redirect('/boxes')
+  // After signup, check if we have an active session
+  // If email confirmation is enabled, session will be null until confirmed
+  if (data.session) {
+    redirect('/boxes')
+  } else {
+    redirect('/signup?message=Please check your email to confirm your account')
+  }
 }
 
 export async function signInWithGoogle() {
@@ -89,24 +94,32 @@ export async function signInWithGoogle() {
 
 export async function createBox(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
   
-  if (!user) {
+  if (!session || !session.access_token) {
       redirect('/login')
   }
 
   const boxName = formData.get('boxName') as string
 
-  // Insert box (RLS allows user_id = auth.uid())
-  const { data: box, error: boxError } = await supabase
-      .from('boxes')
-      .insert({ name: boxName, user_id: user.id })
-      .select('id')
-      .single()
+  // Use the backend API to create the box
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+  const res = await fetch(`${API_URL}/api/v1/boxes/`, {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ name: boxName.trim() })
+  });
 
-  if (boxError || !box) {
-      redirect(`/onboarding?message=Could not create box: ${boxError?.message}`)
+  if (!res.ok) {
+      const errorData = await res.json().catch(() => ({ detail: "Unknown error" }));
+      redirect(`/onboarding?message=${encodeURIComponent(errorData.detail || 'Could not create box')}`)
   }
+
+  const json = await res.json();
+  const box = json.data;
 
   redirect(`/boxes/${box.id}`)
 }

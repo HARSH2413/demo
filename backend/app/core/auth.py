@@ -44,21 +44,12 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         _token_cache[token] = ctx
         return ctx
     except Exception as e:
-        logger.warning(f"Invalid JWT token: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-def verify_workspace_access(tenant_id: str, user_id: str) -> bool:
-    """
-    Checks if a user has access to a workspace via database lookup.
-    """
-    db = _get_db_adapter()
-    try:
-        # Since SupabaseAdapter doesn't have this method yet, we use the underlying client directly
-        result = db.client.table("workspace_members").select("*").eq("workspace_id", tenant_id).eq("user_id", user_id).execute()
-        return len(result.data) > 0
-    except Exception as e:
-        logger.error(f"Error checking workspace access: {e}")
-        return False
+        error_name = type(e).__name__
+        if error_name == "AuthApiError" or "invalid" in str(e).lower() or "expired" in str(e).lower():
+            logger.warning(f"Invalid JWT token: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+        logger.error(f"Unexpected error validating token: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 def verify_box_access(box_id: str, user_id: str) -> dict:
     """
