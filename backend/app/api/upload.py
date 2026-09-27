@@ -76,7 +76,7 @@ async def upload_document(
 
         # 2. Rename temp file to hash-based filename
         file_path = os.path.join(TEMP_DIR, f"{file_hash}{safe_ext}")
-        os.rename(temp_path, file_path)
+        os.replace(temp_path, file_path)
 
         # 3. Create document record immediately to prevent race conditions and mark as processing
         try:

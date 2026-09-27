@@ -85,6 +85,11 @@ class IngestionService:
 
         except Exception as e:
             logger.error(f"Failed to process '{filename}': {e}")
+            try:
+                logger.warning(f"Cleaning up partial chunks for failed document {document_id}")
+                self.db.delete_chunks_by_document(document_id)
+            except Exception as cleanup_e:
+                logger.error(f"Failed to clean up partial chunks for {document_id}: {cleanup_e}")
             raise e
         finally:
             if os.path.exists(file_path):

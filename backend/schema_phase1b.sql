@@ -182,6 +182,7 @@ BEGIN
         FROM public.document_chunks dc
         JOIN public.documents d ON dc.document_id = d.id
         WHERE d.box_id = match_box_id
+          AND d.status = 'completed'
         ORDER BY dc.embedding <=> query_embedding
         LIMIT match_count * 2
     ),
@@ -193,6 +194,7 @@ BEGIN
         FROM public.document_chunks dc
         JOIN public.documents d ON dc.document_id = d.id
         WHERE d.box_id = match_box_id
+          AND d.status = 'completed'
           AND dc.content_tsvector @@ websearch_to_tsquery('english', query_text)
         ORDER BY lexical_score DESC
         LIMIT match_count * 2

@@ -142,6 +142,16 @@ class SupabaseAdapter(IVectorStore):
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=lambda rs: logger.warning(f"Supabase delete_chunks_by_document retry (attempt {rs.attempt_number})"),
+    )
+    def delete_chunks_by_document(self, document_id: str) -> None:
+        """Deletes all chunks belonging to a specific document without deleting the document itself."""
+        self.client.table("document_chunks").delete().eq("document_id", document_id).execute()
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase get_all_documents retry (attempt {rs.attempt_number})"),
     )
     def get_all_documents(self, box_id: str) -> List[str]:

@@ -33,6 +33,11 @@ class IVectorStore(ABC):
         pass
         
     @abstractmethod
+    def delete_chunks_by_document(self, document_id: str) -> None:
+        """Deletes all chunks belonging to a specific document without deleting the document itself."""
+        pass
+
+    @abstractmethod
     def get_all_documents(self, box_id: str) -> List[str]:
         """Fetches a list of all unique filenames for a box."""
         pass
