@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 class IVectorStore(ABC):
     @abstractmethod
@@ -8,7 +8,7 @@ class IVectorStore(ABC):
         pass
 
     @abstractmethod
-    def update_document_status(self, document_id: str, status: str, error_message: str = None) -> None:
+    def update_document_status(self, document_id: str, status: str, error_message: Optional[str] = None) -> None:
         """Updates the status and optional error message of a document."""
         pass
         

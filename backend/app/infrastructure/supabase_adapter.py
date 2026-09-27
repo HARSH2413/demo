@@ -5,7 +5,7 @@ Wraps every call with tenacity retries so transient network errors
 (connection resets, timeouts) don't crash the entire request.
 """
 import httpx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from app.interfaces.vector_store import IVectorStore
@@ -62,7 +62,7 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         before_sleep=lambda rs: logger.warning(f"Supabase update_document_status retry (attempt {rs.attempt_number})"),
     )
-    def update_document_status(self, document_id: str, status: str, error_message: str = None) -> None:
+    def update_document_status(self, document_id: str, status: str, error_message: Optional[str] = None) -> None:
         """Updates the processing status of a document."""
         update_data = {"status": status}
         if error_message is not None:
