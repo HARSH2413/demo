@@ -13,6 +13,9 @@
   
   --animate-slide-in: slide-in 0.3s ease-out forwards;
   --animate-grid: grid 20s linear infinite;
+  --animate-fade-in-up: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
   @keyframes slide-in {
     from { transform: translateX(100%); opacity: 0; }
@@ -22,6 +25,16 @@
   @keyframes grid {
     0% { transform: translateY(-50%); }
     100% { transform: translateY(0); }
+  }
+
+  @keyframes fade-in-up {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 }
 

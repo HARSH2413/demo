@@ -7,7 +7,8 @@ Wraps every call with tenacity retries so transient network errors
 import httpx
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from postgrest.exceptions import APIError
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from app.interfaces.vector_store import IVectorStore
 from app.core.logger import logger
 
@@ -20,6 +21,27 @@ RETRYABLE_EXCEPTIONS = (
     httpx.ReadTimeout,
     httpx.ConnectTimeout,
 )
+
+def is_transient_error(e: BaseException) -> bool:
+    if isinstance(e, RETRYABLE_EXCEPTIONS):
+        return True
+    
+    if isinstance(e, APIError):
+        msg = str(getattr(e, 'message', '')).lower()
+        code = str(getattr(e, 'code', '')).lower()
+        
+        # 429 Rate Limit
+        if "rate limit" in msg or "too many requests" in msg or code == "429":
+            return True
+            
+        # 5xx Server Errors
+        if any(err in msg for err in ["502", "503", "504", "bad gateway", "service unavailable", "timeout"]):
+            return True
+            
+        if code in ("500", "502", "503", "504"):
+            return True
+
+    return False
 
 class SupabaseAdapter(IVectorStore):
     def __init__(self, url: str, service_key: str, max_retries: int = 3):
@@ -35,7 +57,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_documents retry (attempt {rs.attempt_number})"),
     )
     def save_documents(self, records: List[Dict[str, Any]]) -> int:
@@ -46,7 +68,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_document retry (attempt {rs.attempt_number})"),
     )
     def create_document(self, document: Dict[str, Any]) -> str:
@@ -59,7 +81,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase update_document_status retry (attempt {rs.attempt_number})"),
     )
     def update_document_status(self, document_id: str, status: str, error_message: Optional[str] = None) -> None:
@@ -72,7 +94,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_document_chunks retry (attempt {rs.attempt_number})"),
     )
     def save_document_chunks(self, chunks: List[Dict[str, Any]]) -> int:
@@ -83,7 +105,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase search_similar retry (attempt {rs.attempt_number})"),
     )
     def search_similar(self, query_vector: list[float], query_text: str, box_id: str, limit: int = 10) -> list[dict]:
@@ -107,7 +129,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase document_exists retry (attempt {rs.attempt_number})"),
     )
     def document_exists(self, file_hash: str, box_id: str) -> bool:
@@ -125,7 +147,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_document retry (attempt {rs.attempt_number})"),
     )
     def delete_document(self, filename: str, box_id: str) -> bool:
@@ -141,7 +163,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_chunks_by_document retry (attempt {rs.attempt_number})"),
     )
     def delete_chunks_by_document(self, document_id: str) -> None:
@@ -151,7 +173,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_all_documents retry (attempt {rs.attempt_number})"),
     )
     def get_all_documents(self, box_id: str) -> List[str]:
@@ -188,7 +210,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_chat_session retry (attempt {rs.attempt_number})"),
     )
     def create_chat_session(self, box_id: str, title: str = "New Conversation") -> str:
@@ -216,7 +238,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_chat_history retry (attempt {rs.attempt_number})"),
     )
     def get_chat_history(self, session_id: str, box_id: str) -> list:
@@ -255,7 +277,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_chat_message retry (attempt {rs.attempt_number})"),
     )
     def save_chat_message(self, session_id: str, role: str, content: str):
@@ -271,7 +293,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_neighboring_chunks retry (attempt {rs.attempt_number})"),
     )
     def get_neighboring_chunks(self, document_id: str, chunk_index: int, limit: int = 5) -> list[dict]:
@@ -302,7 +324,7 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_multi_neighboring_chunks retry (attempt {rs.attempt_number})"),
     )
     def get_multi_neighboring_chunks(self, requests: list[dict], limit: int = 5) -> dict[str, list[dict]]:
@@ -355,51 +377,51 @@ class SupabaseAdapter(IVectorStore):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_box retry (attempt {rs.attempt_number})"),
     )
-    def create_box(self, name: str, user_id: str, description: str = None) -> dict:
+    def create_box(self, name: str, user_id: str, description: Optional[str] = None) -> dict:
         response = self.client.table("boxes").insert({
             "name": name,
             "user_id": user_id,
             "description": description
         }).execute()
-        return response.data[0] if response.data else {}
+        return response.data[0] if response.data else {}  # type: ignore
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase list_boxes retry (attempt {rs.attempt_number})"),
     )
     def list_boxes(self, user_id: str) -> list[dict]:
         response = self.client.table("boxes").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
-        return response.data
+        return response.data  # type: ignore
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_box retry (attempt {rs.attempt_number})"),
     )
-    def get_box(self, box_id: str, user_id: str) -> dict:
+    def get_box(self, box_id: str, user_id: str) -> Optional[dict]:
         response = self.client.table("boxes").select("*").eq("id", box_id).eq("user_id", user_id).execute()
-        return response.data[0] if response.data else None
+        return response.data[0] if response.data else None  # type: ignore
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase update_box retry (attempt {rs.attempt_number})"),
     )
-    def update_box(self, box_id: str, user_id: str, data: dict) -> dict:
+    def update_box(self, box_id: str, user_id: str, data: dict) -> Optional[dict]:
         response = self.client.table("boxes").update(data).eq("id", box_id).eq("user_id", user_id).execute()
-        return response.data[0] if response.data else None
+        return response.data[0] if response.data else None  # type: ignore
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_box retry (attempt {rs.attempt_number})"),
     )
     def delete_box(self, box_id: str, user_id: str) -> bool:

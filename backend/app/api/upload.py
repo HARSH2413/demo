@@ -6,6 +6,7 @@ import hashlib
 import tempfile
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks
+from starlette.concurrency import run_in_threadpool
 from app.services.ingestion_service import IngestionService
 from app.core.dependencies import get_ingestion_service
 from app.core.config import settings
@@ -31,7 +32,7 @@ async def upload_document(
     ingestion_service: IngestionService = Depends(get_ingestion_service),
     user: UserContext = Depends(get_current_user),
 ):
-    verify_box_access(box_id, user.user_id)
+    await run_in_threadpool(verify_box_access, box_id, user.user_id)
     original_filename = Path(file.filename or "").name
     safe_ext = Path(original_filename).suffix.lower()
     if not original_filename or safe_ext not in ALLOWED_EXTENSIONS:
@@ -80,13 +81,16 @@ async def upload_document(
 
         # 3. Create document record immediately to prevent race conditions and mark as processing
         try:
-            document_id = ingestion_service.db.create_document({
-                "box_id": box_id,
-                "filename": original_filename,
-                "file_hash": file_hash,
-                "mime_type": file.content_type or expected_mime,
-                "status": "processing"
-            })
+            document_id = await run_in_threadpool(
+                ingestion_service.db.create_document,
+                {
+                    "box_id": box_id,
+                    "filename": original_filename,
+                    "file_hash": file_hash,
+                    "mime_type": file.content_type or expected_mime,
+                    "status": "processing"
+                }
+            )
         except Exception as e:
             if os.path.exists(file_path):
                 os.remove(file_path)

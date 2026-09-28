@@ -1,24 +1,53 @@
+'use client'
+
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { login, signInWithGoogle } from '../auth/actions'
+import { useFormStatus } from 'react-dom'
+import { Eye, EyeOff } from 'lucide-react'
+
+function SubmitButton({ text, loadingText }: { text: string, loadingText: string }) {
+  const { pending } = useFormStatus()
+  
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-600/50 text-white font-medium py-3 rounded-lg mt-4 transition-all flex items-center justify-center gap-2"
+    >
+      {pending ? (
+        <>
+          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          {loadingText}
+        </>
+      ) : (
+        text
+      )}
+    </button>
+  )
+}
 
 export default function LoginPage({
     searchParams,
   }: {
-    searchParams: { message: string }
+    searchParams: Promise<{ message: string }>
   }) {
+  const params = React.use(searchParams);
+  const [showPassword, setShowPassword] = useState(false);
+  
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4">
-      <Link href="/" className="absolute top-8 left-8 text-neutral-400 hover:text-white transition-colors">
+    <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 selection:bg-indigo-500/30">
+      <Link href="/" className="absolute top-8 left-8 text-neutral-400 hover:text-white transition-colors animate-fade-in">
         ← Back to home
       </Link>
       
-      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 p-8 rounded-2xl shadow-xl">
+      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 p-8 rounded-2xl shadow-2xl animate-fade-in-up">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white text-xl shadow-lg mb-4">
-            A
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white text-xl shadow-lg shadow-indigo-500/20 mb-4">
+            D
           </div>
           <h2 className="text-2xl font-bold text-white">Welcome back</h2>
-          <p className="text-neutral-400 text-sm mt-2">Continue to your workspace</p>
+          <p className="text-neutral-400 text-sm mt-2">Log in to your workspace</p>
         </div>
 
         {/* Google Sign-In */}
@@ -47,7 +76,7 @@ export default function LoginPage({
           </div>
         </div>
 
-        <form className="flex flex-col gap-4">
+        <form action={login} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <label className="text-sm text-neutral-300 font-medium" htmlFor="email">
               Email
@@ -62,32 +91,40 @@ export default function LoginPage({
             />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="text-sm text-neutral-300 font-medium" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              className="px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-lg text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-              placeholder="••••••••"
-              type="password"
-              required
-            />
+          <div className="flex flex-col gap-2 relative">
+            <div className="flex justify-between items-center">
+              <label className="text-sm text-neutral-300 font-medium" htmlFor="password">
+                Password
+              </label>
+              {/* If password recovery is supported in actions.ts, we can add a link here, but it's not currently implemented in auth actions. */}
+            </div>
+            
+            <div className="relative">
+              <input
+                id="password"
+                name="password"
+                className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-lg text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all pr-12"
+                placeholder="••••••••"
+                type={showPassword ? "text" : "password"}
+                required
+              />
+              <button 
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
 
-          {searchParams?.message && (
-            <p className="text-sm text-red-400 bg-red-400/10 p-3 rounded text-center">
-              {searchParams.message}
-            </p>
+          {params?.message && (
+            <div className="text-sm text-red-400 bg-red-400/10 p-3 rounded-lg text-center border border-red-500/20 animate-fade-in">
+              {params.message}
+            </div>
           )}
 
-          <button
-            formAction={login}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-lg mt-4 transition-colors"
-          >
-            Sign In
-          </button>
+          <SubmitButton text="Log In" loadingText="Logging in..." />
         </form>
 
         <div className="mt-8 text-center text-sm text-neutral-400">

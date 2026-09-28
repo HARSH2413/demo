@@ -18,6 +18,10 @@ ACCURACY FEATURES (v2):
 """
 import csv
 import fitz  # PyMuPDF
+
+class PartialIngestionError(Exception):
+    """Raised when one or more batches fail during ingestion, but some chunks succeeded."""
+    pass
 import docx
 import gc
 import os
@@ -83,6 +87,9 @@ class IngestionService:
             # Successfully completed ingestion
             self.db.update_document_status(document_id, "completed")
 
+        except PartialIngestionError as e:
+            logger.warning(f"Partial ingestion for '{filename}': {e}")
+            raise e
         except Exception as e:
             logger.error(f"Failed to process '{filename}': {e}")
             try:
@@ -93,90 +100,96 @@ class IngestionService:
             raise e
         finally:
             if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.debug(f"Cleaned up temp file: {file_path}")
+                try:
+                    os.remove(file_path)
+                    logger.debug(f"Cleaned up temp file: {file_path}")
+                except Exception as cleanup_e:
+                    logger.error(f"Failed to clean up temp file '{file_path}': {cleanup_e}")
 
     def _process_pdf_streaming(self, file_path: str, filename: str, file_hash: str, box_id: str, document_id: str, file_type: str = "PDF"):
         """Memory-safe PDF processing — pages in batches with block-based extraction."""
-        doc = fitz.open(file_path)
-        total_pages = doc.page_count
-        logger.info(f"Processing PDF '{filename}' | {total_pages} pages | batch size {PDF_PAGE_BATCH_SIZE}")
-
-        total_chunks_saved = 0
-        failed_batches = 0
-        all_text_for_summary = []  # Collect first pages for summary generation
-        global_chunk_index = 1
-
-        for page_start in range(0, total_pages, PDF_PAGE_BATCH_SIZE):
-            page_end = min(page_start + PDF_PAGE_BATCH_SIZE, total_pages)
-
-            page_texts = []
-            for page_num in range(page_start, page_end):
-                page = doc.load_page(page_num)
-                # Use 'blocks' extraction to preserve document structure (headings, paragraphs)
-                blocks = page.get_text("blocks")
-                # Sort blocks by vertical position (top to bottom), then horizontal
-                blocks.sort(key=lambda b: (b[1], b[0]))
-                page_text = "\n".join(b[4] for b in blocks if b[6] == 0)  # type 0 = text blocks
-                page_texts.append(page_text)
-
-            batch_text = "\n".join(page_texts)
-
-            # Collect text from first 3 pages for summary
-            if page_start == 0:
-                all_text_for_summary.append(batch_text[:3000])
-
-            del page_texts
-
-            if not batch_text.strip():
-                continue
-
-            chunks = self.text_splitter.split_text(batch_text)
-            del batch_text
-
-            if not chunks:
-                continue
-
-            for i in range(0, len(chunks), self.batch_size):
-                embed_batch = chunks[i : i + self.batch_size]
-
-                try:
-                    contextual_batch = [
-                        f"[Document: {filename} | Type: {file_type} | Pages {page_start+1}-{page_end} | Chunk {i+j+1}]\n\n{chunk}"
-                        for j, chunk in enumerate(embed_batch)
-                    ]
-                    embeddings = self.embedder.embed_text(contextual_batch)
-                    del contextual_batch
-
-                    records = [
-                        {
-                            "document_id": document_id,
-                            "content": chunk,
-                            "embedding": embeddings[j],
-                            "chunk_index": global_chunk_index + j,
-                            "page_start": page_start + 1,
-                            "page_end": page_end,
-                            "metadata": {"type": file_type}
-                        }
-                        for j, chunk in enumerate(embed_batch)
-                    ]
-
-                    self.db.save_document_chunks(records)
-                    total_chunks_saved += len(embed_batch)
+        with fitz.open(file_path) as doc:
+            total_pages = doc.page_count
+            logger.info(f"Processing PDF '{filename}' | {total_pages} pages | batch size {PDF_PAGE_BATCH_SIZE}")
+    
+            total_chunks_saved = 0
+            failed_batches = 0
+            all_text_for_summary = []  # Collect first pages for summary generation
+            global_chunk_index = 1
+    
+            for page_start in range(0, total_pages, PDF_PAGE_BATCH_SIZE):
+                page_end = min(page_start + PDF_PAGE_BATCH_SIZE, total_pages)
+    
+                page_texts = []
+                for page_num in range(page_start, page_end):
+                    page = doc.load_page(page_num)
+                    # Use 'blocks' extraction to preserve document structure (headings, paragraphs)
+                    blocks = page.get_text("blocks")
+                    # Sort blocks by vertical position (top to bottom), then horizontal
+                    blocks.sort(key=lambda b: (b[1], b[0]))
+                    page_text = "\n".join(b[4] for b in blocks if b[6] == 0)  # type 0 = text blocks
+                    page_texts.append(page_text)
+    
+                batch_text = "\n".join(page_texts)
+    
+                # Collect text from first 3 pages for summary
+                if page_start == 0:
+                    all_text_for_summary.append(batch_text[:3000])
+    
+                del page_texts
+    
+                if not batch_text.strip():
+                    continue
+    
+                chunks = self.text_splitter.split_text(batch_text)
+                del batch_text
+    
+                if not chunks:
+                    continue
+    
+                for i in range(0, len(chunks), self.batch_size):
+                    embed_batch = chunks[i : i + self.batch_size]
+    
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            contextual_batch = [
+                                f"[Document: {filename} | Type: {file_type} | Pages {page_start+1}-{page_end} | Chunk {i+j+1}]\n\n{chunk}"
+                                for j, chunk in enumerate(embed_batch)
+                            ]
+                            embeddings = self.embedder.embed_text(contextual_batch)
+                            del contextual_batch
+    
+                            records = [
+                                {
+                                    "document_id": document_id,
+                                    "content": chunk,
+                                    "embedding": embeddings[j],
+                                    "chunk_index": global_chunk_index + j,
+                                    "page_start": page_start + 1,
+                                    "page_end": page_end,
+                                    "metadata": {"type": file_type}
+                                }
+                                for j, chunk in enumerate(embed_batch)
+                            ]
+    
+                            self.db.save_document_chunks(records)
+                            total_chunks_saved += len(embed_batch)
+                            del records, embeddings
+                            break
+                        except Exception as e:
+                            if attempt == max_retries - 1:
+                                failed_batches += 1
+                                logger.error(f"Failed batch for pages {page_start+1}-{page_end}: {e}")
+                            else:
+                                logger.warning(f"Retrying batch for pages {page_start+1}-{page_end} (attempt {attempt + 1})")
+    
                     global_chunk_index += len(embed_batch)
-                    del records, embeddings
-
-                except Exception as e:
-                    failed_batches += 1
-                    logger.error(f"Failed batch for pages {page_start+1}-{page_end}: {e}")
-                    raise e
-
-            del chunks
-            gc.collect()
-
-            logger.info(f"PDF '{filename}' | pages {page_start+1}-{page_end}/{total_pages} | {total_chunks_saved} chunks")
-
-        doc.close()
+    
+                del chunks
+                gc.collect()
+    
+                logger.info(f"PDF '{filename}' | pages {page_start+1}-{page_end}/{total_pages} | {total_chunks_saved} chunks")
 
         # Generate and store document summary as chunk 0
         if all_text_for_summary:
@@ -187,6 +200,7 @@ class IngestionService:
 
         if failed_batches > 0:
             logger.warning(f"Completed '{filename}' with {failed_batches} failed batches | {total_chunks_saved} chunks")
+            raise PartialIngestionError(f"Completed with {failed_batches} failed batches | {total_chunks_saved} chunks saved")
         else:
             logger.info(f"Successfully ingested '{filename}' | {total_pages} pages → {total_chunks_saved} chunks")
 
@@ -217,38 +231,44 @@ class IngestionService:
             batch_num = i // self.batch_size + 1
             batch_chunks = chunks[i : i + self.batch_size]
 
-            try:
-                contextual_batch = [
-                    f"[Document: {filename} | Type: {file_type} | Chunk {i + j + 1}/{total_chunks}]\n\n{chunk}"
-                    for j, chunk in enumerate(batch_chunks)
-                ]
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    contextual_batch = [
+                        f"[Document: {filename} | Type: {file_type} | Chunk {i + j + 1}/{total_chunks}]\n\n{chunk}"
+                        for j, chunk in enumerate(batch_chunks)
+                    ]
 
-                embeddings = self.embedder.embed_text(contextual_batch)
-                del contextual_batch
+                    embeddings = self.embedder.embed_text(contextual_batch)
+                    del contextual_batch
 
-                records = [
-                    {
-                        "document_id": document_id,
-                        "content": chunk,
-                        "embedding": embeddings[j],
-                        "chunk_index": global_chunk_index + j,
-                        "metadata": {"type": file_type}
-                    }
-                    for j, chunk in enumerate(batch_chunks)
-                ]
+                    records = [
+                        {
+                            "document_id": document_id,
+                            "content": chunk,
+                            "embedding": embeddings[j],
+                            "chunk_index": global_chunk_index + j,
+                            "metadata": {"type": file_type}
+                        }
+                        for j, chunk in enumerate(batch_chunks)
+                    ]
 
-                self.db.save_document_chunks(records)
-                global_chunk_index += len(batch_chunks)
-                del records, embeddings
-                logger.info(f"Processed batch {batch_num}/{total_batches} for '{filename}'")
+                    self.db.save_document_chunks(records)
+                    del records, embeddings
+                    logger.info(f"Processed batch {batch_num}/{total_batches} for '{filename}'")
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        failed_batches += 1
+                        logger.error(f"Failed batch {batch_num}/{total_batches} for '{filename}': {e}")
+                    else:
+                        logger.warning(f"Retrying batch {batch_num}/{total_batches} for '{filename}' (attempt {attempt + 1})")
 
-            except Exception as e:
-                failed_batches += 1
-                logger.error(f"Failed batch {batch_num}/{total_batches} for '{filename}': {e}")
-                raise e
+            global_chunk_index += len(batch_chunks)
 
         if failed_batches > 0:
             logger.warning(f"Completed '{filename}' with {failed_batches}/{total_batches} failed batches")
+            raise PartialIngestionError(f"Completed with {failed_batches}/{total_batches} failed batches")
         else:
             logger.info(f"Successfully ingested '{filename}' ({total_batches} batches)")
 
