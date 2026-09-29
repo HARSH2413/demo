@@ -3,14 +3,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import Link from 'next/link';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import {
   MessageSquare, Plus, FileText, Send, Paperclip, X,
   Loader2, Info, Database, History, CheckCircle2,
-  AlertCircle, RefreshCw, XCircle, Cloud, Search, FileUp, ArrowUpDown, Pencil, Trash2
+  AlertCircle, RefreshCw, Pencil, Trash2
 } from 'lucide-react';
-import { API_URL } from '@/lib/config';
-import { createClient } from '@/lib/supabase/client';
-
+import { apiFetch as sharedApiFetch, ApiError } from '@/lib/api';
+import { ToastContainer, Toast } from '@/components/chat/ToastContainer';
+import { KnowledgeBaseView, DocumentRecord } from '@/components/chat/KnowledgeBaseView';
 // ── Types ──
 
 interface Citation {
@@ -28,19 +29,7 @@ interface ChatMessage {
   error?: boolean;
 }
 
-interface Toast {
-  id: number;
-  message: string;
-  type: 'success' | 'error' | 'warning';
-}
 
-interface DocumentRecord {
-  filename: string;
-  file_hash?: string;
-  created_at?: string;
-  status?: 'processing' | 'indexed' | 'failed';
-  size?: number;
-}
 
 interface ChatSession {
   id: string;
@@ -48,135 +37,7 @@ interface ChatSession {
   created_at?: string;
 }
 
-// ── Inline Toast Component ──
 
-function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
-  return (
-    <div className="fixed top-6 right-6 z-50 space-y-3">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-sm font-semibold backdrop-blur-md animate-slide-in max-w-sm ${toast.type === 'success' ? 'bg-emerald-600/95 text-white' :
-            toast.type === 'error' ? 'bg-red-600/95 text-white' :
-              'bg-amber-500/95 text-white'
-            }`}
-        >
-          {toast.type === 'success' && <CheckCircle2 size={16} />}
-          {toast.type === 'error' && <XCircle size={16} />}
-          {toast.type === 'warning' && <AlertCircle size={16} />}
-          <span className="flex-1">{toast.message}</span>
-          <button onClick={() => onDismiss(toast.id)} className="opacity-70 hover:opacity-100">
-            <X size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Knowledge Base View Component ──
-// NOTE: For maintainability, this would typically be in its own file (e.g., `components/KnowledgeBaseView.tsx`)
-function KnowledgeBaseView({
-  documents,
-  isSyncing,
-  isUploading,
-  onUploadClick,
-  onDriveSync,
-  onForceResync,
-  onDeleteFile, onFilesSelected,
-}: {
-  documents: DocumentRecord[];
-  isSyncing: boolean;
-  isUploading: boolean;
-  onUploadClick: () => void;
-  onDriveSync: () => void;
-  onForceResync: () => void;
-  onDeleteFile: (filename: string) => void;
-  onFilesSelected: (files: FileList | File[]) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<'newest' | 'name'>('newest');
-  const [dragging, setDragging] = useState(false);
-  const visibleDocuments = documents
-    .filter((document) => document.filename.toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) => sort === 'name'
-      ? a.filename.localeCompare(b.filename)
-      : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-  const fileType = (filename: string) => filename.split('.').pop()?.toUpperCase() || 'FILE';
-
-  return (
-    <div className="p-10 bg-slate-50 flex-1 overflow-y-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Knowledge Base</h2>
-        <div className="flex gap-3">
-          <button onClick={onForceResync} disabled={isSyncing} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-all disabled:opacity-50 shadow-md shadow-amber-100">
-            {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Force Re-sync
-          </button>
-          <button onClick={onDriveSync} disabled={isSyncing} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-md shadow-emerald-100">
-            {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
-            Sync Drive
-          </button>
-          <button onClick={onUploadClick} disabled={isUploading} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-md shadow-indigo-100">
-            {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Upload Document
-          </button>
-        </div>
-      </div>
-      <div
-        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event) => { event.preventDefault(); setDragging(false); onFilesSelected(event.dataTransfer.files); }}
-        onClick={onUploadClick}
-        className={`mb-6 cursor-pointer rounded-3xl border-2 border-dashed p-7 text-center transition-all ${dragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'}`}
-      >
-        <FileUp className="mx-auto mb-2 text-indigo-600" size={28} />
-        <p className="font-bold text-slate-700">Drop documents here, or click to upload</p>
-        <p className="mt-1 text-xs text-slate-500">PDF, DOCX, TXT, CSV, XLSX · up to 25 MB each · multiple files supported</p>
-      </div>
-
-      <div className="mb-5 flex flex-wrap gap-3">
-        <label className="relative min-w-64 flex-1">
-          <Search size={16} className="absolute left-3 top-3 text-slate-400" />
-          <input aria-label="Search documents" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search documents..." className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-500" />
-        </label>
-        <button onClick={() => setSort(sort === 'newest' ? 'name' : 'newest')} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:border-indigo-300">
-          <ArrowUpDown size={15} /> {sort === 'newest' ? 'Newest first' : 'Name'}
-        </button>
-      </div>
-
-      {visibleDocuments.length === 0 ? (
-        <div className="text-center p-12 border border-slate-200 rounded-3xl bg-white text-slate-500">
-          <Database size={40} className="mx-auto mb-4 opacity-20" />
-          <p>{documents.length ? 'No documents match your search.' : 'Your knowledge base is empty.'}</p>
-          {!documents.length && <p className="text-xs mt-2">Upload a document or sync your Google Drive folder to get started.</p>}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {visibleDocuments.map((document) => (
-            <div key={document.filename} className="p-6 bg-white border border-slate-200 rounded-3xl hover:border-indigo-500 hover:shadow-xl transition-all group flex flex-col justify-between min-h-36 relative">
-              <div className="flex items-start justify-between">
-                <FileText className="text-indigo-600 group-hover:scale-110 transition-transform" size={28} />
-                <button aria-label={`Delete ${document.filename}`} onClick={(e) => { e.stopPropagation(); onDeleteFile(document.filename); }} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                  <X size={14} />
-                </button>
-              </div>
-              <div>
-                <h4 className="font-bold text-sm truncate text-slate-800">{document.filename}</h4>
-                <p className="text-[10px] text-slate-400 mt-1">{fileType(document.filename)}{document.size ? ` · ${(document.size / 1024 / 1024).toFixed(1)} MB` : ''}{document.created_at ? ` · ${new Date(document.created_at).toLocaleDateString()}` : ''}</p>
-                <p className={`text-[10px] font-bold mt-2 uppercase tracking-tighter flex items-center gap-1 ${document.status === 'processing' ? 'text-amber-600' : document.status === 'failed' ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {document.status === 'processing' ? <Loader2 size={10} className="animate-spin" /> : document.status === 'failed' ? <AlertCircle size={10} /> : <CheckCircle2 size={10} />} {document.status === 'processing' ? 'Indexing' : document.status === 'failed' ? 'Failed' : 'Indexed'}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Main Dashboard ──
 
 export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string, boxName: string }) {
   const [activeDoc, setActiveDoc] = useState<{ title: string, content: string, fileUrl?: string } | null>(null);
@@ -185,7 +46,22 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [currentView, setCurrentView] = useState<'chat' | 'documents'>('chat');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const viewParam = searchParams.get('view');
+  const currentView = viewParam === 'documents' ? 'documents' : 'chat';
+
+  const setCurrentView = (view: 'chat' | 'documents') => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (view === 'chat') {
+      params.delete('view'); // cleaner URL for default
+    } else {
+      params.set('view', view);
+    }
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -206,46 +82,24 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   }, []);
 
   const apiFetch = useCallback(async (path: string, options?: RequestInit) => {
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    const fetchHeaders: Record<string, string> = {};
-    if (options?.headers) {
-      if (options.headers instanceof Headers) {
-        options.headers.forEach((value, key) => { fetchHeaders[key] = value; });
-      } else {
-        Object.assign(fetchHeaders, options.headers);
+    try {
+      return await sharedApiFetch(path, options);
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        if (err.status === 429) {
+          showToast("Rate limited — please wait a moment and try again", "warning");
+          throw new Error("rate_limited");
+        }
+        if (err.status === 409) {
+          showToast(err.detail || "Duplicate file detected", "warning");
+          throw new Error("duplicate");
+        }
+        showToast(err.detail || "Something went wrong", "error");
+        throw new Error(err.detail || `HTTP ${err.status}`);
       }
+      showToast(err.message || "Something went wrong", "error");
+      throw err;
     }
-    
-    if (session?.access_token) {
-      fetchHeaders['Authorization'] = `Bearer ${session.access_token}`;
-    }
-
-    // Fix: If body is FormData, let the browser automatically set Content-Type with boundary
-    if (options?.body instanceof FormData) {
-      delete fetchHeaders['Content-Type'];
-      delete fetchHeaders['content-type'];
-    }
-
-    const res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: fetchHeaders
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ detail: "Unknown error" }));
-      if (res.status === 429) {
-        showToast("Rate limited — please wait a moment and try again", "warning");
-        throw new Error("rate_limited");
-      }
-      if (res.status === 409) {
-        showToast(data.detail || "Duplicate file detected", "warning");
-        throw new Error("duplicate");
-      }
-      showToast(data.detail || "Something went wrong", "error");
-      throw new Error(data.detail || `HTTP ${res.status}`);
-    }
-    return res.json();
   }, [showToast]);
 
   useEffect(() => {

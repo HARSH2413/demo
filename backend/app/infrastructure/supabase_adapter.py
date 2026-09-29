@@ -8,7 +8,7 @@ import httpx
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
 from postgrest.exceptions import APIError
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception
 from app.interfaces.vector_store import IVectorStore
 from app.core.logger import logger
 
@@ -56,7 +56,7 @@ class SupabaseAdapter(IVectorStore):
     # ── Legacy Workspace Document Operations ──
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_documents retry (attempt {rs.attempt_number})"),
     )
@@ -67,7 +67,7 @@ class SupabaseAdapter(IVectorStore):
     # ── Box Document Operations (Phase 1B) ──
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_document retry (attempt {rs.attempt_number})"),
     )
@@ -80,7 +80,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase update_document_status retry (attempt {rs.attempt_number})"),
     )
@@ -93,7 +93,7 @@ class SupabaseAdapter(IVectorStore):
         
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_document_chunks retry (attempt {rs.attempt_number})"),
     )
@@ -104,7 +104,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase search_similar retry (attempt {rs.attempt_number})"),
     )
@@ -128,7 +128,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase document_exists retry (attempt {rs.attempt_number})"),
     )
@@ -146,7 +146,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_document retry (attempt {rs.attempt_number})"),
     )
@@ -162,7 +162,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_chunks_by_document retry (attempt {rs.attempt_number})"),
     )
@@ -172,7 +172,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_all_documents retry (attempt {rs.attempt_number})"),
     )
@@ -209,7 +209,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_chat_session retry (attempt {rs.attempt_number})"),
     )
@@ -237,7 +237,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_chat_history retry (attempt {rs.attempt_number})"),
     )
@@ -276,7 +276,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_chat_message retry (attempt {rs.attempt_number})"),
     )
@@ -292,7 +292,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_neighboring_chunks retry (attempt {rs.attempt_number})"),
     )
@@ -323,7 +323,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_multi_neighboring_chunks retry (attempt {rs.attempt_number})"),
     )
@@ -376,7 +376,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_box retry (attempt {rs.attempt_number})"),
     )
@@ -390,7 +390,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase list_boxes retry (attempt {rs.attempt_number})"),
     )
@@ -400,7 +400,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_box retry (attempt {rs.attempt_number})"),
     )
@@ -410,7 +410,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase update_box retry (attempt {rs.attempt_number})"),
     )
@@ -420,7 +420,7 @@ class SupabaseAdapter(IVectorStore):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_box retry (attempt {rs.attempt_number})"),
     )

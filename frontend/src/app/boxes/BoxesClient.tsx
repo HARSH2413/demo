@@ -4,14 +4,22 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2, Plus, Database, ChevronRight, AlertCircle, Trash2 } from 'lucide-react';
-import { API_URL } from '@/lib/config';
 import { createClient } from '@/lib/supabase/client';
+import { apiFetch } from '@/lib/api';
 
 interface Box {
   id: string;
   name: string;
   description?: string;
   created_at: string;
+}
+
+interface BoxesResponse {
+  data: Box[];
+}
+
+interface SingleBoxResponse {
+  data: Box;
 }
 
 export default function BoxesClient() {
@@ -22,61 +30,20 @@ export default function BoxesClient() {
   const [isCreating, setIsCreating] = useState(false);
   const [newBoxName, setNewBoxName] = useState('');
 
-  const apiFetch = useCallback(async (path: string, options?: RequestInit, isRetry = false): Promise<unknown> => {
-    const supabase = createClient();
-    let { data: { session } } = await supabase.auth.getSession();
-    
-    if (isRetry) {
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError || !refreshData.session) {
-        window.location.href = '/login';
-        return new Promise(() => {});
-      }
-      session = refreshData.session;
-    }
-    
-    const fetchHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options?.headers as Record<string, string>),
-    };
-    
-    if (session?.access_token) {
-      fetchHeaders['Authorization'] = `Bearer ${session.access_token}`;
-    }
 
-    const res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: fetchHeaders
-    });
-    
-    if (!res.ok) {
-      if (res.status === 401 && !isRetry) {
-        return apiFetch(path, options, true);
-      } else if (res.status === 401) {
-        window.location.href = '/login';
-        return new Promise(() => {});
-      }
-      if (res.status === 403) {
-        throw new Error("Access denied.");
-      }
-      const data = await res.json().catch(() => ({ detail: "Unknown error" }));
-      throw new Error(data.detail || `HTTP ${res.status}`);
-    }
-    return res.json();
-  }, []);
 
   const fetchBoxes = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await apiFetch('/api/v1/boxes/');
+      const res = await apiFetch<BoxesResponse>('/api/v1/boxes/');
       setBoxes(res.data || []);
     } catch (err: any) {
       setError(err.message || "Failed to load boxes.");
     } finally {
       setLoading(false);
     }
-  }, [apiFetch]);
+  }, []);
 
   useEffect(() => {
     fetchBoxes();
@@ -89,7 +56,7 @@ export default function BoxesClient() {
     try {
       setIsCreating(true);
       setError(null);
-      const res = await apiFetch('/api/v1/boxes/', {
+      const res = await apiFetch<SingleBoxResponse>('/api/v1/boxes/', {
         method: 'POST',
         body: JSON.stringify({ name: newBoxName.trim() })
       });

@@ -16,7 +16,7 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
-    redirect('/login?message=Could not authenticate user')
+    redirect('/login?error=Could not authenticate user')
   }
 
   revalidatePath('/', 'layout')
@@ -26,7 +26,7 @@ export async function login(formData: FormData) {
   if (user) {
       redirect('/boxes')
   } else {
-      redirect('/login?message=Authentication failed')
+      redirect('/login?error=Authentication failed')
   }
 }
 
@@ -40,12 +40,12 @@ export async function signup(formData: FormData) {
 
   // Validate passwords match
   if (password !== confirmPassword) {
-    redirect('/signup?message=Passwords do not match')
+    redirect('/signup?error=Passwords do not match')
   }
 
   // Validate password strength
   if (password.length < 6) {
-    redirect('/signup?message=Password must be at least 6 characters')
+    redirect('/signup?error=Password must be at least 6 characters')
   }
 
   const { data, error } = await supabase.auth.signUp({
@@ -59,7 +59,7 @@ export async function signup(formData: FormData) {
   })
 
   if (error) {
-    redirect(`/signup?message=${encodeURIComponent(error.message)}`)
+    redirect(`/signup?error=${encodeURIComponent(error.message)}`)
   }
 
   // After signup, check if we have an active session
@@ -67,7 +67,7 @@ export async function signup(formData: FormData) {
   if (data.session) {
     redirect('/boxes')
   } else {
-    redirect('/signup?message=Please check your email to confirm your account')
+    redirect('/signup?success=Please check your email to confirm your account')
   }
 }
 
@@ -84,7 +84,7 @@ export async function signInWithGoogle() {
   })
 
   if (error) {
-    redirect('/login?message=Could not connect to Google')
+    redirect('/login?error=Could not connect to Google')
   }
 
   if (data.url) {
