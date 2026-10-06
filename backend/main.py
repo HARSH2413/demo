@@ -19,7 +19,6 @@ from app.core.dependencies import _get_embedder_adapter, _get_reranker_adapter
 from app.api.chat import router as chat_router
 from app.api.upload import router as upload_router
 from app.api.documents import router as documents_router
-from app.api.drive import router as drive_router
 from app.api.boxes import router as boxes_router
 
 
@@ -76,7 +75,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.info(f"Incoming request: {request.method} {request.url}")
-    logger.info(f"Headers: {request.headers}")
+    safe_headers = dict(request.headers)
+    for sensitive_key in ["authorization", "cookie"]:
+        if sensitive_key in safe_headers:
+            safe_headers[sensitive_key] = "***MASKED***"
+    logger.info(f"Headers: {safe_headers}")
     try:
         response = await call_next(request)
         if response.status_code >= 400:
@@ -103,7 +106,6 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(upload_router)
 app.include_router(documents_router)
-app.include_router(drive_router)
 app.include_router(boxes_router)
 
 

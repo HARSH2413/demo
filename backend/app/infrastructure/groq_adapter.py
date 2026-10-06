@@ -8,6 +8,7 @@ from groq import Groq
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from app.interfaces.llm import ILLM
 from app.core.logger import logger
+from app.core.config import settings
 
 
 class GroqAdapter(ILLM):
@@ -20,7 +21,7 @@ class GroqAdapter(ILLM):
         logger.info(f"Groq adapter initialized | model={model_name} | timeout={timeout}s")
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.LLM_MAX_RETRIES),
         wait=wait_exponential(multiplier=1, min=2, max=30),
         retry=retry_if_exception_type(Exception),
         before_sleep=lambda retry_state: logger.warning(
@@ -39,7 +40,7 @@ class GroqAdapter(ILLM):
         return response.choices[0].message.content
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.LLM_MAX_RETRIES),
         wait=wait_exponential(multiplier=1, min=2, max=30),
         retry=retry_if_exception_type(Exception),
         before_sleep=lambda retry_state: logger.warning(

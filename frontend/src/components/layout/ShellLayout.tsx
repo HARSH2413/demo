@@ -19,7 +19,7 @@ export default function ShellLayout({ children, userEmail, userName }: ShellLayo
 
   const navItems = [
     { name: 'Dashboard', href: '/boxes', icon: LayoutDashboard },
-    { name: 'My Boxes', href: '/boxes', icon: FolderOpen },
+    { name: 'My Boxes', href: '/boxes/all', icon: FolderOpen },
     { name: 'Knowledge Base', href: '/knowledge-base', icon: Sparkles, badge: 'Soon' },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];

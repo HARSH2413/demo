@@ -69,6 +69,10 @@ export default function BoxesClient({ userName = '' }: { userName?: string }) {
   useEffect(() => {
     const handler = () => setShowCreateModal(true);
     window.addEventListener('docintel:create-box', handler);
+    if (new URLSearchParams(window.location.search).get('new') === '1') {
+      setShowCreateModal(true);
+      window.history.replaceState(null, '', '/boxes');
+    }
     return () => window.removeEventListener('docintel:create-box', handler);
   }, []);
 

@@ -18,7 +18,9 @@ class EvidenceEngine:
     def get_doc_relevance_score(self, doc: dict) -> float:
         if "rerank_score" in doc and doc.get("rerank_score") is not None:
             return float(doc.get("rerank_score", 0.0))
-        return float(doc.get("similarity", 0.0))
+        if "similarity" in doc and doc.get("similarity") is not None:
+            return float(doc.get("similarity", 0.0))
+        return float(doc.get("embedding_score", 0.0))
 
     def filter_and_expand(self, docs: list[dict]) -> list[dict]:
         filtered = self._dynamic_relevance_filter(docs)

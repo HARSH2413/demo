@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Literal
 from app.core.logger import logger
 from app.core.auth import get_current_user, UserContext, verify_box_access
 from app.services.box_service import BoxService
@@ -11,11 +11,12 @@ router = APIRouter(prefix="/api/v1/boxes", tags=["Boxes"])
 class BoxCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
-    domain: Optional[str] = Field(None, max_length=64)
+    domain: Optional[Literal["finance", "legal", "human_resources", "engineering", "sales", "marketing", "operations", "compliance", "general"]] = None
 
 class BoxUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
+    domain: Optional[Literal["finance", "legal", "human_resources", "engineering", "sales", "marketing", "operations", "compliance", "general"]] = None
 
 @router.post("/")
 def create_box(

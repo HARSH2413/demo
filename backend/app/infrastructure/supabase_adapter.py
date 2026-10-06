@@ -11,6 +11,7 @@ from postgrest.exceptions import APIError
 from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception
 from app.interfaces.vector_store import IVectorStore
 from app.core.logger import logger
+from app.core.config import settings
 
 # Define a tuple of exceptions that are safe to retry.
 # Retrying on all `Exception` types can be dangerous, as it might hide
@@ -55,7 +56,7 @@ class SupabaseAdapter(IVectorStore):
 
     # ── Legacy Workspace Document Operations ──
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_documents retry (attempt {rs.attempt_number})"),
@@ -66,7 +67,7 @@ class SupabaseAdapter(IVectorStore):
 
     # ── Box Document Operations (Phase 1B) ──
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_document retry (attempt {rs.attempt_number})"),
@@ -79,7 +80,7 @@ class SupabaseAdapter(IVectorStore):
         return doc_response.data[0]["id"]
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase update_document_status retry (attempt {rs.attempt_number})"),
@@ -92,7 +93,7 @@ class SupabaseAdapter(IVectorStore):
         self.client.table("documents").update(update_data).eq("id", document_id).execute()
         
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_document_chunks retry (attempt {rs.attempt_number})"),
@@ -103,31 +104,27 @@ class SupabaseAdapter(IVectorStore):
         return len(response.data)
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase search_similar retry (attempt {rs.attempt_number})"),
     )
     def search_similar(self, query_vector: list[float], query_text: str, box_id: str, limit: int = 10) -> list[dict]:
         """Runs the Hybrid Search RPC in Supabase (Box scoped)."""
-        try:
-            response = self.client.rpc(
-                "match_documents_hybrid_box",
-                {
-                    "query_embedding": query_vector,
-                    "query_text": query_text,
-                    "match_box_id": box_id,
-                    "match_count": limit,
-                },
-            ).execute()
-            logger.info(f"Hybrid search returned {len(response.data)} docs for box={box_id}")
-            return response.data
-        except Exception as e:
-            logger.error(f"Hybrid search failed for box={box_id}, query='{query_text[:80]}': {e}")
-            return []
+        response = self.client.rpc(
+            "match_documents_hybrid_box",
+            {
+                "query_embedding": query_vector,
+                "query_text": query_text,
+                "match_box_id": box_id,
+                "match_count": limit,
+            },
+        ).execute()
+        logger.info(f"Hybrid search returned {len(response.data)} docs for box={box_id}")
+        return response.data
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase document_exists retry (attempt {rs.attempt_number})"),
@@ -145,7 +142,7 @@ class SupabaseAdapter(IVectorStore):
         return len(response.data) > 0
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_document retry (attempt {rs.attempt_number})"),
@@ -161,7 +158,7 @@ class SupabaseAdapter(IVectorStore):
         return len(response.data) > 0
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_chunks_by_document retry (attempt {rs.attempt_number})"),
@@ -171,7 +168,7 @@ class SupabaseAdapter(IVectorStore):
         self.client.table("document_chunks").delete().eq("document_id", document_id).execute()
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_all_documents retry (attempt {rs.attempt_number})"),
@@ -208,7 +205,7 @@ class SupabaseAdapter(IVectorStore):
     # ── Chat Session Operations ──
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_chat_session retry (attempt {rs.attempt_number})"),
@@ -236,7 +233,7 @@ class SupabaseAdapter(IVectorStore):
         return bool(response.data)
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_chat_history retry (attempt {rs.attempt_number})"),
@@ -275,7 +272,7 @@ class SupabaseAdapter(IVectorStore):
         return bool(response.data)
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase save_chat_message retry (attempt {rs.attempt_number})"),
@@ -291,7 +288,7 @@ class SupabaseAdapter(IVectorStore):
     # ── Neighbor Context (Parent-Child Retrieval) ──
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_neighboring_chunks retry (attempt {rs.attempt_number})"),
@@ -301,28 +298,23 @@ class SupabaseAdapter(IVectorStore):
         Fetches chunks from the same document purely based on chunk_index.
         Retrieves exactly the chunks around the given index to provide surrounding context.
         """
-        try:
-            # We fetch a window around the index: [chunk_index - limit//2, chunk_index + limit//2]
-            # but for simplicity, we can fetch chunk_index-2 to chunk_index+2
-            half_limit = limit // 2
-            min_index = max(0, chunk_index - half_limit)
-            max_index = chunk_index + half_limit
+        half_limit = limit // 2
+        min_index = max(0, chunk_index - half_limit)
+        max_index = chunk_index + half_limit
 
-            response = (
-                self.client.table("document_chunks")
-                .select("id, document_id, content, chunk_index, page_start, page_end")
-                .eq("document_id", document_id)
-                .gte("chunk_index", min_index)
-                .lte("chunk_index", max_index)
-                .order("chunk_index")
-                .execute()
-            )
-            return response.data
-        except Exception as e:
-            return []
+        response = (
+            self.client.table("document_chunks")
+            .select("id, document_id, content, chunk_index, page_start, page_end")
+            .eq("document_id", document_id)
+            .gte("chunk_index", min_index)
+            .lte("chunk_index", max_index)
+            .order("chunk_index")
+            .execute()
+        )
+        return response.data
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_multi_neighboring_chunks retry (attempt {rs.attempt_number})"),
@@ -353,29 +345,26 @@ class SupabaseAdapter(IVectorStore):
                 
             or_str = ",".join(or_conditions)
             
-            try:
-                response = (
-                    self.client.table("document_chunks")
-                    .select("id, document_id, content, chunk_index, page_start, page_end")
-                    .or_(or_str)
-                    .order("chunk_index")
-                    .execute()
-                )
-                
-                for row in response.data:
-                    doc_id = row["document_id"]
-                    if doc_id not in results:
-                        results[doc_id] = []
-                    results[doc_id].append(row)
-            except Exception as e:
-                logger.error(f"Failed to fetch multi neighboring chunks batch: {e}")
+            response = (
+                self.client.table("document_chunks")
+                .select("id, document_id, content, chunk_index, page_start, page_end")
+                .or_(or_str)
+                .order("chunk_index")
+                .execute()
+            )
+            
+            for row in response.data:
+                doc_id = row["document_id"]
+                if doc_id not in results:
+                    results[doc_id] = []
+                results[doc_id].append(row)
                 
         return results
 
     # ── Box Operations (Phase 1A) ──
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_box retry (attempt {rs.attempt_number})"),
@@ -392,7 +381,7 @@ class SupabaseAdapter(IVectorStore):
         return response.data[0] if response.data else {}  # type: ignore
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase list_boxes retry (attempt {rs.attempt_number})"),
@@ -402,7 +391,7 @@ class SupabaseAdapter(IVectorStore):
         return response.data  # type: ignore
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase get_box retry (attempt {rs.attempt_number})"),
@@ -412,7 +401,7 @@ class SupabaseAdapter(IVectorStore):
         return response.data[0] if response.data else None  # type: ignore
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase update_box retry (attempt {rs.attempt_number})"),
@@ -422,7 +411,7 @@ class SupabaseAdapter(IVectorStore):
         return response.data[0] if response.data else None  # type: ignore
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_box retry (attempt {rs.attempt_number})"),
