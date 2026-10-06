@@ -75,10 +75,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.info(f"Incoming request: {request.method} {request.url}")
-    safe_headers = dict(request.headers)
-    for sensitive_key in ["authorization", "cookie"]:
-        if sensitive_key in safe_headers:
-            safe_headers[sensitive_key] = "***MASKED***"
+    safe_headers = {
+        k: v for k, v in request.headers.items() 
+        if k.lower() in {"user-agent", "host", "accept", "content-type", "x-forwarded-for"}
+    }
     logger.info(f"Headers: {safe_headers}")
     try:
         response = await call_next(request)

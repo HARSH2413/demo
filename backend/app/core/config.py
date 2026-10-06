@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # A question must meet this score before the assistant is allowed to answer.
     # Keep this higher than the retrieval fallback floor to prevent off-topic answers.
     ANSWER_MIN_RELEVANCE_SCORE: float = 0.3
-    ENABLE_QUERY_REWRITE: bool = True  # LLM-based query rewriting for multi-turn
+    ENABLE_QUERY_REWRITE: bool = False  # LLM-based query rewriting for multi-turn
     ENABLE_HYDE: bool = False          # expensive; enable in .env when needed
     ENABLE_MULTI_QUERY: bool = False   # expensive; enable in .env when needed
     ENABLE_NEIGHBOR_CONTEXT: bool = False  # extra DB calls; enable in .env when needed
@@ -56,8 +56,6 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 300
     INGESTION_BATCH_SIZE: int = 10     # keep small to avoid OOM with large embedding models
 
-    # ── Google Drive ──
-    GOOGLE_DRIVE_FOLDER_ID: str = ""  # set in .env
 
     # ── Answer Formatting & Structure ──
     ENABLE_STRUCTURED_ANSWERS: bool = True  # Enable hierarchical answer structure
