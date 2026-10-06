@@ -2,16 +2,16 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import {
   MessageSquare, Plus, FileText, Send, Paperclip, X,
-  Loader2, Info, Database, History, CheckCircle2,
-  AlertCircle, RefreshCw, Pencil, Trash2
+  Loader2, CheckCircle2, AlertCircle, RefreshCw, Pencil, Trash2, FolderOpen
 } from 'lucide-react';
 import { apiFetch as sharedApiFetch, ApiError } from '@/lib/api';
 import { ToastContainer, Toast } from '@/components/chat/ToastContainer';
 import { KnowledgeBaseView, DocumentRecord } from '@/components/chat/KnowledgeBaseView';
+import UploadProgressModal, { UploadFileItem } from '@/components/chat/UploadProgressModal';
+
 // ── Types ──
 
 interface Citation {
@@ -29,15 +29,11 @@ interface ChatMessage {
   error?: boolean;
 }
 
-
-
 interface ChatSession {
   id: string;
   title: string;
   created_at?: string;
 }
-
-
 
 export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string, boxName: string }) {
   const [activeDoc, setActiveDoc] = useState<{ title: string, content: string, fileUrl?: string } | null>(null);
@@ -45,18 +41,17 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   const [inputText, setInputText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
   const viewParam = searchParams.get('view');
-  const currentView = viewParam === 'documents' ? 'documents' : 'chat';
+  const currentView = viewParam === 'chat' ? 'chat' : 'documents';
 
   const setCurrentView = (view: 'chat' | 'documents') => {
     const params = new URLSearchParams(searchParams.toString());
-    if (view === 'chat') {
-      params.delete('view'); // cleaner URL for default
+    if (view === 'documents') {
+      params.delete('view');
     } else {
       params.set('view', view);
     }
@@ -67,6 +62,9 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recentChats, setRecentChats] = useState<ChatSession[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [showSourcePanel, setShowSourcePanel] = useState(false);
+  const [uploadFileItems, setUploadFileItems] = useState<UploadFileItem[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,20 +82,20 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   const apiFetch = useCallback(async (path: string, options?: RequestInit) => {
     try {
       return await sharedApiFetch(path, options);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 429) {
           showToast("Rate limited — please wait a moment and try again", "warning");
           throw new Error("rate_limited");
         }
         if (err.status === 409) {
-          showToast(err.detail || "Duplicate file detected", "warning");
+          showToast(err.detail as string || "Duplicate file detected", "warning");
           throw new Error("duplicate");
         }
-        showToast(err.detail || "Something went wrong", "error");
-        throw new Error(err.detail || `HTTP ${err.status}`);
+        showToast(err.detail as string || "Something went wrong", "error");
+        throw new Error(err.detail as string || `HTTP ${err.status}`);
       }
-      showToast(err.message || "Something went wrong", "error");
+      showToast(err instanceof Error ? err.message : "Something went wrong", "error");
       throw err;
     }
   }, [showToast]);
@@ -112,7 +110,6 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
       if (data.documents) {
         setDocuments(data.documents);
       } else if (data.files) {
-        // Fallback for older API versions without document objects
         setDocuments(data.files.map((filename: string) => ({ filename, status: 'completed' as const })));
       }
     } catch {
@@ -120,7 +117,6 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
     }
   }, [apiFetch, boxId]);
 
-  // Initial fetch and polling effect
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
@@ -129,16 +125,10 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   useEffect(() => {
     const hasProcessing = documents.some(doc => doc.status === 'processing');
     let timeoutId: number;
-
     if (hasProcessing) {
-      timeoutId = window.setTimeout(() => {
-        fetchDocuments();
-      }, 3000);
+      timeoutId = window.setTimeout(() => { fetchDocuments(); }, 3000);
     }
-
-    return () => {
-      if (timeoutId) window.clearTimeout(timeoutId);
-    };
+    return () => { if (timeoutId) window.clearTimeout(timeoutId); };
   }, [documents, fetchDocuments]);
 
   const fetchChatSessions = useCallback(async () => {
@@ -177,25 +167,57 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
     if (!validFiles.length) return;
 
     setIsUploading(true);
+
+    // Build modal items for each file
+    const newItems: UploadFileItem[] = validFiles.map(f => ({
+      filename: f.name,
+      size: f.size,
+      status: 'queued' as const,
+      progress: 0,
+    }));
+    setUploadFileItems(newItems);
+    setShowUploadModal(true);
+
     setDocuments((previous) => [
       ...validFiles.filter((file) => !previous.some((document) => document.filename === file.name)).map((file) => ({ filename: file.name, size: file.size, status: 'processing' as const })),
       ...previous,
     ]);
 
-    await Promise.all(validFiles.map(async (file) => {
+    await Promise.all(validFiles.map(async (file, idx) => {
+      // Mark as processing
+      setUploadFileItems(prev => prev.map((item, i) =>
+        i === idx ? { ...item, status: 'processing' as const, progress: 15, statusMessage: 'Uploading file...' } : item
+      ));
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('box_id', boxId);
       try {
+        // Simulate progress steps
+        setUploadFileItems(prev => prev.map((item, i) =>
+          i === idx ? { ...item, progress: 45, statusMessage: 'Extracting content' } : item
+        ));
         const data = await apiFetch('/api/v1/upload/box', { method: 'POST', body: formData });
-        showToast(data.message, 'success');
+        setUploadFileItems(prev => prev.map((item, i) =>
+          i === idx ? { ...item, status: 'indexing' as const, progress: 72, statusMessage: 'Generating vectors' } : item
+        ));
+        // Brief delay for visual feedback, then mark ready
+        await new Promise(resolve => setTimeout(resolve, 600));
+        setUploadFileItems(prev => prev.map((item, i) =>
+          i === idx ? { ...item, status: 'ready' as const, progress: 100, statusMessage: data.message || 'Indexed and ready' } : item
+        ));
       } catch {
+        setUploadFileItems(prev => prev.map((item, i) =>
+          i === idx ? { ...item, status: 'failed' as const, progress: 0, statusMessage: 'Processing failed' } : item
+        ));
         setDocuments((previous) => previous.map((document) => document.filename === file.name ? { ...document, status: 'failed' } : document));
       }
     }));
 
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsUploading(false);
+    // Refresh documents list after batch completes
+    fetchDocuments();
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => uploadFiles(event.target.files || []);
@@ -225,34 +247,6 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
       }
       showToast('Conversation deleted', 'success');
     } catch { }
-  };
-
-  const handleDriveSync = async (forceResync: boolean = false) => {
-    setIsSyncing(true);
-    const formData = new FormData();
-    formData.append("box_id", boxId);
-    if (forceResync) {
-      formData.append("force_resync", "true");
-    }
-
-    try {
-      showToast(forceResync ? "Force re-syncing all files..." : "Scanning Google Drive folder...", "warning");
-      const data = await apiFetch("/api/v1/drive/sync", {
-        method: "POST",
-        body: formData,
-      });
-      showToast(data.message, "success");
-      if (data.queued_files && data.queued_files.length > 0) {
-        setDocuments(prev => [
-          ...data.queued_files.filter((filename: string) => !prev.some(document => document.filename === filename)).map((filename: string) => ({ filename, status: 'processing' as const })),
-          ...prev,
-        ]);
-      }
-    } catch {
-      // Errors handled by apiFetch
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   const handleSendMessage = async (retryContent?: string) => {
@@ -308,272 +302,275 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
     } catch { }
   };
 
-  const getFileUrl = (name: string) => {
-    const localFiles: Record<string, string> = {};
-    const key = Object.keys(localFiles).find(k => k.toLowerCase() === name.toLowerCase());
-    return key ? localFiles[key] : undefined;
-  };
+  const activeDocCount = documents.filter(d => d.status !== 'failed').length;
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden">
+    <div className="flex h-full bg-white text-slate-900 overflow-hidden relative">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      <aside className="w-72 border-r border-slate-200 flex flex-col bg-white shrink-0">
-        <div className="p-6 flex items-center gap-3">
-          <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-100">
-            <Database className="text-white w-5 h-5" />
-          </div>
-          <span className="font-bold text-xl tracking-tight text-slate-800">ActionRAG</span>
-        </div>
+      {/* Upload Progress Modal — matches Stitch design */}
+      <UploadProgressModal
+        isOpen={showUploadModal}
+        boxName={boxName}
+        files={uploadFileItems}
+        onClose={() => setShowUploadModal(false)}
+        onCancelAll={() => {
+          setShowUploadModal(false);
+          setUploadFileItems([]);
+        }}
+        onRemoveFile={(filename) => {
+          setUploadFileItems(prev => prev.filter(f => f.filename !== filename));
+        }}
+      />
 
-        <div className="px-6 mb-6">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2 block">Active Box</label>
-          <div className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl block p-2.5 font-semibold">
-            {boxName}
-          </div>
-          <Link href="/boxes" className="mt-3 inline-block text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors">
-            ← Back to Boxes
-          </Link>
-        </div>
+      {currentView === 'documents' && (
+        <>
+          <KnowledgeBaseView
+            boxId={boxId}
+            boxName={boxName}
+            documents={documents}
+            isUploading={isUploading}
+            onUploadClick={() => fileInputRef.current?.click()}
+            onDeleteFile={handleDeleteFile}
+            onFilesSelected={uploadFiles}
+            onOpenChat={() => setCurrentView('chat')}
+          />
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,.txt,.docx,.csv,.xlsx" multiple />
+        </>
+      )}
 
-        <button onClick={() => { setMessages([]); setSessionId(null); setCurrentView('chat'); }} className="mx-6 mb-8 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100">
-          <Plus size={18} /> New Investigation
-        </button>
-
-        <nav className="flex-1 overflow-y-auto px-4 space-y-8">
-          <div>
-            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] px-2 mb-3">Library</h3>
-            <div onClick={() => setCurrentView('documents')} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${currentView === 'documents' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <FileText size={18} /> <span className="text-sm">Knowledge Base</span>
+      {/* ── Main Workspace: Chat + Source Panel ── */}
+      {/* Matches Stitch: docintel_minimal_box_workspace_chat_light */}
+      {currentView === 'chat' && (
+      <div className="flex-1 flex flex-col h-full min-w-0 bg-white">
+        {/* Clean Workspace Header — matches Stitch exactly */}
+        <header className="h-14 border-b border-slate-200 bg-white px-4 md:px-6 flex items-center justify-between shrink-0 z-20">
+          <div className="flex items-center gap-3 md:gap-4 min-w-0">
+            <div className="flex items-center gap-2">
+              <FolderOpen className="text-slate-400 w-5 h-5 shrink-0" />
+              <h1 className="text-sm font-semibold text-slate-900 truncate tracking-tight font-headline">
+                {boxName}
+              </h1>
+            </div>
+            <span className="h-4 w-[1px] bg-slate-200 hidden sm:block" />
+            {/* Subtle document count indicator */}
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-xs font-medium text-emerald-700 border border-emerald-200/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>{activeDocCount} documents active</span>
             </div>
           </div>
-
-          {recentChats.length > 0 && (
-            <div>
-              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] px-2 mb-3">Recent Inquiries</h3>
-              <div className="space-y-1">
-                {recentChats.map((chat) => (
-                  <div key={chat.id} onClick={() => { setSessionId(chat.id); setCurrentView('chat'); }} className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-xs truncate transition-all ${sessionId === chat.id ? 'bg-slate-100 text-indigo-600 font-bold border-l-4 border-indigo-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50'}`}>
-                    <History size={14} className="shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{chat.title}</span>
-                    <button aria-label={`Rename ${chat.title}`} onClick={(event) => { event.stopPropagation(); handleRenameChat(chat); }} className="hidden p-1 hover:text-indigo-700 group-hover:block"><Pencil size={12} /></button>
-                    <button aria-label={`Delete ${chat.title}`} onClick={(event) => { event.stopPropagation(); handleDeleteChat(chat); }} className="hidden p-1 hover:text-red-600 group-hover:block"><Trash2 size={12} /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </nav>
-
-        <div className="p-4 border-t border-slate-200">
-           <form action={async () => {
-             // In a real client component, you'd import logout from actions and call it here.
-             // But since this is a client component passing server actions can be tricky unless passed as props or imported directly.
-             // We will just do a simple window.location redirect for now or we can use the Next.js router.
-             // Actually, we can import logout from '@/app/auth/actions'.
-           }}>
-             <button
-               onClick={(e) => {
-                  e.preventDefault();
-                  fetch('/auth/logout', { method: 'POST' }).then(() => window.location.href = '/login')
-               }}
-               className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-             >
-               Sign Out
-             </button>
-           </form>
-        </div>
-      </aside>
-
-      <main className={`flex-1 flex flex-col min-w-0 bg-white transition-all duration-500 ease-in-out ${activeDoc ? 'max-w-[50%] border-r border-slate-200' : 'max-w-full'}`}>
-        <header className="h-16 border-b border-slate-100 flex items-center justify-between px-8 shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <h2 className="font-bold text-sm text-slate-700 uppercase tracking-widest">
-              {currentView === 'chat' ? 'Neural Search Active' : 'Document Index'}
-            </h2>
-          </div>
-          <div className="flex items-center gap-3">
-            {isSyncing && <span className="text-xs text-emerald-600 font-bold flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Syncing Drive...</span>}
-            {isUploading && <span className="text-xs text-indigo-600 font-bold flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Indexing Document...</span>}
-            {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />}
+            <button
+              onClick={() => setCurrentView('documents')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Documents</span>
+            </button>
+            {(
+              <button
+                onClick={() => {
+                  if (activeDoc) {
+                    setActiveDoc(null);
+                    setShowSourcePanel(false);
+                  } else {
+                    setShowSourcePanel(!showSourcePanel);
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium transition-colors ${showSourcePanel || activeDoc ? 'bg-slate-100 text-slate-900' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                <span className="hidden sm:inline">Source Panel</span>
+              </button>
+            )}
           </div>
         </header>
 
-        {currentView === 'chat' ? (
-          <>
-            <div className="flex-1 overflow-y-auto p-10 space-y-10 scroll-smooth bg-slate-50">
-              {messages.length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
-                  <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center">
-                    <MessageSquare size={40} className="text-indigo-600 opacity-40" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-slate-800">Enterprise Contextual AI</h3>
-                    <p className="text-sm text-slate-400 max-w-sm">Ask a question to retrieve insights from your uploaded technical or legal documentation.</p>
-                  </div>
-                </div>
-              )}
-              {messages.map((msg, idx) => (
-                <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start gap-4'}`}>
-
-                  {msg.role === 'ai' && (
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-lg mt-1 ${msg.error ? 'bg-red-500 shadow-red-100' : 'bg-indigo-600 shadow-indigo-100'
-                      }`}>
-                      {msg.error ? <AlertCircle className="text-white w-4 h-4" /> : <span className="text-white text-xs font-black italic">AI</span>}
-                    </div>
-                  )}
-
-                  <div className={`flex flex-col space-y-3 max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                    {msg.role === 'ai' && !msg.error && msg.key_takeaways && msg.key_takeaways.length > 0 && (
-                      <div className="w-full bg-amber-50 border-l-4 border-amber-400 p-4 rounded-lg animate-in fade-in">
-                        <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-2.5 flex items-center gap-2">
-                          <span className="text-lg">📌</span> Key Takeaways
-                        </p>
-                        <ul className="text-sm text-amber-800 space-y-1.5">
-                          {msg.key_takeaways.map((point, pIdx) => (
-                            <li key={pIdx} className="flex items-start gap-2">
-                              <span className="text-amber-400 font-bold mt-0.5">•</span>
-                              <span className="leading-relaxed">{point}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className={`p-6 text-[15px] leading-relaxed shadow-sm transition-all ${msg.role === 'user'
-                      ? 'bg-slate-900 text-white rounded-3xl rounded-tr-sm'
-                      : msg.error
-                        ? 'bg-red-50 border border-red-200 text-red-700 rounded-3xl rounded-tl-sm'
-                        : 'bg-white border border-slate-200 text-slate-800 rounded-3xl rounded-tl-sm'
-                      }`}>
-                      <div className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert' : msg.error ? '' : 'prose-indigo'}`}>
-                        <ReactMarkdown>
-                          {msg.content}
-                        </ReactMarkdown>
-                      </div>
-
-                      {msg.error && (
-                        <button onClick={() => { const lastUserMsg = messages.slice(0, idx).reverse().find(m => m.role === 'user'); if (lastUserMsg) handleSendMessage(lastUserMsg.content); }} className="mt-3 flex items-center gap-2 text-xs font-bold text-red-600 hover:text-red-800 transition-colors">
-                          <RefreshCw size={12} /> Retry
-                        </button>
-                      )}
-                    </div>
-
-                    {msg.role === 'ai' && !msg.error && msg.citations && msg.citations.length > 0 && (
-                      <div className="flex flex-wrap gap-2 animate-in fade-in pt-1 pl-2">
-                        {Array.from(new Set(msg.citations.map(c => c.filename))).map((filename, cIdx) => (
-                          <button key={cIdx} onClick={() => { const cite = msg.citations?.find(c => c.filename === filename); setActiveDoc({ title: filename, content: cite?.content || "", fileUrl: getFileUrl(filename) }); }} className="group flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-full text-[11px] font-bold text-indigo-700 hover:bg-indigo-600 hover:text-white transition-all duration-200">
-                            <CheckCircle2 size={12} className="text-indigo-400 group-hover:text-white" />
-                            {filename}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {msg.role === 'ai' && !msg.error && msg.related_questions && msg.related_questions.length > 0 && (
-                      <div className="w-full mt-3 pt-3 border-t border-slate-200">
-                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2.5">💡 Related Questions</p>
+        {/* Body */}
+        <main className="flex-1 flex overflow-hidden relative">
+          {/* Chat / Documents Area */}
+          <section className={`flex-1 flex flex-col h-full min-w-0 bg-white relative ${activeDoc ? 'max-w-[55%]' : ''}`}>
+            {currentView === 'chat' ? (
+              <>
+                {/* Scrollable Chat */}
+                <div className="flex-1 overflow-y-auto px-4 md:px-6 py-8 bg-white">
+                  <div className="max-w-3xl mx-auto space-y-8 pb-8">
+                    {messages.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center text-center pt-20 space-y-4">
+                        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                          <MessageSquare size={28} className="text-indigo-600 opacity-60" />
+                        </div>
                         <div className="space-y-2">
-                          {msg.related_questions.map((q, qIdx) => (
-                            <button
-                              key={qIdx}
-                              onClick={() => { setInputText(q); handleSendMessage(q); }}
-                              className="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-indigo-50 transition-colors text-slate-700 hover:text-indigo-700 font-medium flex items-start gap-2"
-                            >
-                              <span className="text-indigo-500 mt-0.5 flex-shrink-0">→</span>
-                              <span className="leading-relaxed">{q}</span>
-                            </button>
-                          ))}
+                          <h3 className="text-lg font-semibold text-slate-900 font-headline">Ask a question</h3>
+                          <p className="text-sm text-slate-500 max-w-sm">
+                            Ask a question about documents in this Box to retrieve grounded, cited answers.
+                          </p>
+                        </div>
+                        {/* New Chat + History buttons on mobile */}
+                        <div className="flex items-center gap-2 md:hidden mt-4">
+                          <button onClick={() => { setMessages([]); setSessionId(null); }} className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-600">
+                            <Plus size={14} className="inline mr-1" /> New Chat
+                          </button>
                         </div>
                       </div>
                     )}
+
+                    {messages.map((msg, idx) => (
+                      <div key={idx} className="flex gap-4 items-start">
+                        {/* Avatar */}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                          msg.role === 'user'
+                            ? 'bg-slate-100 border border-slate-200'
+                            : msg.error
+                              ? 'bg-red-50 border border-red-200'
+                              : 'bg-indigo-50 border border-indigo-100'
+                        }`}>
+                          {msg.role === 'user' ? (
+                            <span className="text-xs font-semibold text-slate-600">You</span>
+                          ) : msg.error ? (
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                          )}
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500 tracking-tight">{msg.role === 'user' ? 'You' : 'DocIntel Synthesizer'}</span>
+                            {msg.role === 'ai' && !msg.error && (
+                              <span className="text-[10px] text-emerald-700 font-medium px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200">
+                                Verified against {activeDocCount} files
+                              </span>
+                            )}
+                          </div>
+
+                          <div className={`text-[15px] leading-relaxed ${msg.error ? 'text-red-700' : 'text-slate-800'}`}>
+                            <div className={`prose prose-sm max-w-none ${msg.error ? '' : 'prose-slate'}`}>
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            </div>
+                          </div>
+
+                          {msg.error && (
+                            <button
+                              onClick={() => { const lastUserMsg = messages.slice(0, idx).reverse().find(m => m.role === 'user'); if (lastUserMsg) handleSendMessage(lastUserMsg.content); }}
+                              className="flex items-center gap-2 text-xs font-medium text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              <RefreshCw size={12} /> Retry
+                            </button>
+                          )}
+
+                          {/* Citations — styled as Stitch source link buttons */}
+                          {msg.role === 'ai' && !msg.error && msg.citations && msg.citations.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {Array.from(new Set(msg.citations.map(c => c.filename))).map((filename, cIdx) => (
+                                <button
+                                  key={cIdx}
+                                  onClick={() => {
+                                    const cite = msg.citations?.find(c => c.filename === filename);
+                                    setActiveDoc({ title: filename, content: cite?.content || "" });
+                                    setShowSourcePanel(true);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-indigo-600 transition-colors bg-white px-2 py-1 rounded-md border border-slate-200 shadow-xs"
+                                >
+                                  <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                  <span>{filename}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Related questions */}
+                          {msg.role === 'ai' && !msg.error && msg.related_questions && msg.related_questions.length > 0 && (
+                            <div className="pt-3 mt-3 border-t border-slate-100">
+                              <p className="text-xs font-semibold text-slate-500 mb-2">Related Questions</p>
+                              <div className="space-y-1.5">
+                                {msg.related_questions.map((q, qIdx) => (
+                                  <button key={qIdx} onClick={() => { setInputText(q); handleSendMessage(q); }}
+                                    className="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600 hover:text-indigo-600 font-medium flex items-start gap-2">
+                                    <span className="text-indigo-500 mt-0.5">→</span>
+                                    <span className="leading-relaxed">{q}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
 
-            <div className="p-6 border-t border-slate-200 bg-white">
-              <div className="max-w-4xl mx-auto relative group flex items-center">
-                <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="absolute left-4 z-10 p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all disabled:opacity-50">
-                  {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Paperclip size={20} />}
-                </button>
-                <input className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-16 pr-16 text-sm focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all" placeholder="Query your internal knowledge base..." value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()} />
-                <button onClick={() => handleSendMessage()} disabled={isProcessing || !inputText.trim()} className="absolute right-3 bg-indigo-600 p-2.5 rounded-xl text-white hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all disabled:opacity-50">
-                  <Send size={18} />
-                </button>
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,.txt,.docx,.csv,.xlsx" multiple />
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <KnowledgeBaseView
-              documents={documents}
-              isSyncing={isSyncing}
-              isUploading={isUploading}
-              onUploadClick={() => fileInputRef.current?.click()}
-              onDriveSync={() => handleDriveSync(false)}
-              onForceResync={() => handleDriveSync(true)}
-              onDeleteFile={handleDeleteFile}
-              onFilesSelected={uploadFiles}
-            />
-            <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,.txt,.docx,.csv,.xlsx" multiple />
-          </>
-        )}
-      </main>
-
-      {activeDoc && (
-        <aside className="w-1/2 bg-slate-50 flex flex-col shrink-0 animate-in slide-in-from-right duration-500 ease-out z-20 shadow-2xl border-l border-slate-200">
-          <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                <FileText size={18} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 truncate max-w-[250px]">{activeDoc.title}</h3>
-                <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1 w-fit mt-1">
-                  <CheckCircle2 size={10} /> Source Authenticated
-                </span>
-              </div>
-            </div>
-            <button onClick={() => setActiveDoc(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-900">
-              <X size={20} />
-            </button>
-          </header>
-
-          <div className="flex-1 overflow-hidden relative">
-            {activeDoc.fileUrl ? (
-              <iframe
-                src={`${activeDoc.fileUrl}#toolbar=0&navpanes=0&view=FitH`}
-                className="w-full h-full border-0"
-              />
-            ) : (
-              <div className="h-full p-12 overflow-y-auto">
-                <div className="max-w-2xl mx-auto space-y-8">
-                  <div className="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 relative">
-                    <div className="absolute -top-3 -left-3 bg-indigo-600 text-white p-2 rounded-xl shadow-lg">
-                      <Info size={16} />
+                {/* Input Area — matches Stitch bottom-docked input */}
+                <div className="p-4 bg-white border-t border-slate-200">
+                  <div className="max-w-3xl mx-auto">
+                    <div className="relative flex items-center bg-white border border-slate-200 rounded-xl focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all shadow-xs">
+                      <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="p-3 text-slate-400 hover:text-slate-700 transition-colors" title="Attach Document">
+                        {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Paperclip size={20} />}
+                      </button>
+                      <input
+                        className="flex-1 bg-transparent border-0 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-0 py-3.5 px-1"
+                        placeholder="Ask a question about documents in this Box..."
+                        value={inputText}
+                        onChange={e => setInputText(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                      />
+                      <div className="flex items-center gap-1.5 pr-2">
+                        <button
+                          onClick={() => handleSendMessage()}
+                          disabled={isProcessing || !inputText.trim()}
+                          className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center justify-center shadow-xs disabled:opacity-50"
+                        >
+                          {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        </button>
+                      </div>
                     </div>
-                    <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                      Exact Knowledge Fragment
-                    </h4>
-                    <p className="text-[15px] leading-[1.8] text-slate-700 font-medium whitespace-pre-wrap">
-                      {activeDoc.content}
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-100 p-6 rounded-2xl border border-slate-200">
-                    <p className="text-[11px] text-slate-500 font-bold leading-relaxed">
-                      The AI extracted this specific paragraph from the source document to formulate your answer. The original file is stored securely in your vector database.
-                    </p>
                   </div>
                 </div>
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,.txt,.docx,.csv,.xlsx" multiple />
+              </>
+            ) : null}
+          </section>
+
+          {/* Source Panel — matches Stitch collapsible panel */}
+          {activeDoc && (
+            <aside className="w-[420px] shrink-0 border-l border-slate-200 bg-white flex flex-col h-full transition-all duration-200 ease-in-out hidden md:flex">
+              {/* Source Header */}
+              <div className="h-14 px-4 border-b border-slate-200 flex items-center justify-between shrink-0 bg-slate-50/50">
+                <div className="flex items-center gap-2 truncate">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                  <span className="text-xs font-semibold text-slate-900 tracking-tight truncate font-headline">{activeDoc.title}</span>
+                </div>
+                <button onClick={() => { setActiveDoc(null); setShowSourcePanel(false); }} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Close Panel">
+                  <X size={16} />
+                </button>
               </div>
-            )}
-          </div>
-        </aside>
+
+              {/* Document Viewer Body */}
+              <div className="flex-1 overflow-y-auto p-5 text-xs leading-relaxed space-y-6 select-text text-slate-600 bg-white font-mono">
+                <div className="p-3.5 rounded-lg border border-indigo-200 bg-indigo-50/50 relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-indigo-700 font-semibold text-[11px]">Source Citation</span>
+                    <span className="text-[9px] text-indigo-700 uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-200">Active Citation</span>
+                  </div>
+                  <p className="text-slate-900 leading-normal font-mono text-xs whitespace-pre-wrap">
+                    {activeDoc.content}
+                  </p>
+                </div>
+              </div>
+
+              {/* Source Footer */}
+              <div className="p-3 border-t border-slate-200 bg-slate-50/50 text-[11px] text-slate-500 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>Source verified</span>
+                </div>
+              </div>
+            </aside>
+          )}
+        </main>
+      </div>
       )}
     </div>
   );

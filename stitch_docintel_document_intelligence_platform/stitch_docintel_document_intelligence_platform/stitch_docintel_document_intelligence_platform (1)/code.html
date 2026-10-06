@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DocIntel - Uploading &amp; Processing Files</title>
+<!-- Material Symbols Outlined font -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Hanken Grotesk, Inter, JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Configuration -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-tertiary-container": "#b8e0ff",
+            "on-error": "#ffffff",
+            "on-secondary": "#ffffff",
+            "on-primary": "#ffffff",
+            "secondary-fixed": "#e1e0ff",
+            "background": "#faf8ff",
+            "surface-bright": "#faf8ff",
+            "error": "#ba1a1a",
+            "on-secondary-container": "#fffbff",
+            "tertiary-container": "#006693",
+            "tertiary-fixed-dim": "#89ceff",
+            "inverse-surface": "#283044",
+            "surface-container-lowest": "#ffffff",
+            "surface-variant": "#dae2fd",
+            "surface-container": "#eaedff",
+            "on-tertiary": "#ffffff",
+            "outline": "#777587",
+            "secondary-container": "#6063ee",
+            "on-primary-fixed": "#0f0069",
+            "on-tertiary-fixed-variant": "#004c6e",
+            "on-tertiary-fixed": "#001e2f",
+            "surface-container-highest": "#dae2fd",
+            "on-background": "#131b2e",
+            "surface-dim": "#d2d9f4",
+            "primary-fixed-dim": "#c3c0ff",
+            "tertiary": "#004d70",
+            "outline-variant": "#c7c4d8",
+            "on-surface": "#131b2e",
+            "primary-fixed": "#e2dfff",
+            "tertiary-fixed": "#c9e6ff",
+            "surface": "#faf8ff",
+            "inverse-primary": "#c3c0ff",
+            "secondary": "#4648d4",
+            "on-surface-variant": "#464555",
+            "surface-tint": "#4d44e3",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "primary-container": "#4f46e5",
+            "on-primary-fixed-variant": "#3323cc",
+            "error-container": "#ffdad6",
+            "inverse-on-surface": "#eef0ff",
+            "surface-container-low": "#f2f3ff",
+            "on-secondary-fixed": "#07006c",
+            "surface-container-high": "#e2e7ff",
+            "on-error-container": "#93000a",
+            "on-primary-container": "#dad7ff",
+            "secondary-fixed-dim": "#c0c1ff",
+            "primary": "#3525cd"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "gutter": "1.5rem",
+            "gutter-sm": "1rem",
+            "space-sm": "0.5rem",
+            "space-xl": "2.5rem",
+            "margin": "2rem",
+            "space-md": "1rem",
+            "margin-mobile": "1rem",
+            "space-lg": "1.5rem",
+            "space-xs": "0.25rem"
+          },
+          "fontFamily": {
+            "headline-lg": ["Hanken Grotesk"],
+            "label-sm": ["JetBrains Mono"],
+            "headline-lg-mobile": ["Hanken Grotesk"],
+            "body-lg": ["Inter"],
+            "label-md": ["JetBrains Mono"],
+            "headline-md": ["Hanken Grotesk"],
+            "body-sm": ["Inter"],
+            "display": ["Hanken Grotesk"],
+            "headline-sm": ["Hanken Grotesk"],
+            "body-md": ["Inter"]
+          },
+          "fontSize": {
+            "headline-lg": ["2.25rem", { lineHeight: "1.2", letterSpacing: "-0.025em", fontWeight: "600" }],
+            "label-sm": ["0.6875rem", { lineHeight: "1.35", letterSpacing: "0.02em", fontWeight: "500" }],
+            "headline-lg-mobile": ["1.75rem", { lineHeight: "1.25", letterSpacing: "-0.02em", fontWeight: "600" }],
+            "body-lg": ["1rem", { lineHeight: "1.6", letterSpacing: "-0.01em", fontWeight: "400" }],
+            "label-md": ["0.8125rem", { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "500" }],
+            "headline-md": ["1.5rem", { lineHeight: "1.3", letterSpacing: "-0.02em", fontWeight: "600" }],
+            "body-sm": ["0.75rem", { lineHeight: "1.5", letterSpacing: "0.01em", fontWeight: "400" }],
+            "display": ["3rem", { lineHeight: "1.15", letterSpacing: "-0.03em", fontWeight: "700" }],
+            "headline-sm": ["1.125rem", { lineHeight: "1.4", letterSpacing: "-0.015em", fontWeight: "600" }],
+            "body-md": ["0.875rem", { lineHeight: "1.55", letterSpacing: "0em", fontWeight: "400" }]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden font-body-md text-body-md selection:bg-surface-container-highest">
+<!-- ============================================================== -->
+<!-- BACKGROUND DASHBOARD CANVAS (Blurred & Inactive behind Modal)  -->
+<!-- ============================================================== -->
+<div aria-hidden="true" class="relative w-screen h-screen flex overflow-hidden filter blur-[5px] opacity-80 pointer-events-none select-none aria-hidden">
+<!-- Shared Component SideNavBar (Background Shell Representation) -->
+<aside class="fixed left-0 top-0 h-full z-40 p-4 h-screen w-64 flex flex-col shrink-0 bg-surface-container-lowest border-r border-outline-variant">
+<!-- Header / Logo -->
+<div class="flex items-center gap-3 px-2 mb-6">
+<div class="w-8 h-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center font-semibold text-sm shadow-sm">
+<span class="material-symbols-outlined text-lg" data-icon="description">description</span>
+</div>
+<div>
+<h1 class="font-headline-sm text-headline-sm font-semibold tracking-tight text-on-surface leading-none">DocIntel</h1>
+<p class="font-label-sm text-label-sm text-outline mt-0.5">Precision AI</p>
+</div>
+</div>
+<!-- Quick Action CTA -->
+<div class="mb-4">
+<button class="w-full flex items-center justify-center gap-2 bg-primary-container text-on-primary font-body-md text-body-md py-2 px-3 rounded-lg shadow-sm">
+<span class="material-symbols-outlined text-base" data-icon="add">add</span>
+<span>New Box</span>
+</button>
+</div>
+<!-- Nav Items -->
+<nav class="space-y-1 flex-1">
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg text-outline">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-container-high text-primary font-medium">
+<span class="material-symbols-outlined" data-icon="folder" data-weight="fill" style="font-variation-settings: 'FILL' 1;">folder</span>
+<span class="font-body-md text-body-md">My Boxes</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg text-outline">
+<span class="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>
+<span class="font-body-md text-body-md">Knowledge Base</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg text-outline">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</div>
+</nav>
+<!-- Footer User -->
+<div class="border-t border-outline-variant pt-3">
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg text-outline">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-body-md text-body-md">Profile</span>
+</div>
+</div>
+</aside>
+<!-- Main Content Stage -->
+<div class="flex-1 ml-64 flex flex-col h-full bg-background overflow-hidden">
+<!-- Top Bar -->
+<header class="h-14 border-b border-outline-variant bg-surface-container-lowest px-6 flex items-center justify-between">
+<div class="flex items-center gap-3 w-96">
+<div class="flex items-center gap-2 w-full bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined text-outline text-lg" data-icon="search">search</span>
+<span class="font-body-sm text-body-sm text-outline">Search documents, entities, citations...</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-outline" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-outline" data-icon="help_outline">help_outline</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center text-xs font-semibold text-primary">
+            AD
+          </div>
+</div>
+</header>
+<!-- Dashboard View Content Mockup -->
+<main class="flex-1 p-8 overflow-y-auto space-y-6">
+<div class="flex items-center justify-between border-b border-outline-variant pb-4">
+<div>
+<div class="flex items-center gap-2 text-outline font-label-md text-label-md mb-1">
+<span>My Boxes</span>
+<span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span>
+<span class="text-on-surface font-semibold">Q4 Financial &amp; Regulatory Review</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Q4 Financial &amp; Regulatory Review</h2>
+</div>
+<div class="flex gap-3">
+<span class="px-3 py-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant text-body-sm">Share Box</span>
+<span class="px-3 py-1.5 rounded-lg bg-primary-container text-on-primary text-body-sm font-medium">Add Files</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-6">
+<div class="p-5 bg-surface-container-lowest border border-outline-variant rounded-xl h-36">
+<span class="font-label-sm text-label-sm text-outline">INDEXING HEALTH</span>
+<p class="font-headline-sm text-headline-sm mt-2">Active Ingestion</p>
+</div>
+<div class="p-5 bg-surface-container-lowest border border-outline-variant rounded-xl h-36">
+<span class="font-label-sm text-label-sm text-outline">EXTRACTED ENTITIES</span>
+<p class="font-headline-sm text-headline-sm mt-2">1,248 Items</p>
+</div>
+<div class="p-5 bg-surface-container-lowest border border-outline-variant rounded-xl h-36">
+<span class="font-label-sm text-label-sm text-outline">SECURITY ENCLAVE</span>
+<p class="font-headline-sm text-headline-sm mt-2">SOC2 Type II Protected</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 h-96">
+<div class="h-6 w-48 bg-surface-container rounded mb-4"></div>
+<div class="space-y-3">
+<div class="h-10 bg-surface-container-low rounded"></div>
+<div class="h-10 bg-surface-container-low rounded"></div>
+<div class="h-10 bg-surface-container-low rounded"></div>
+</div>
+</div>
+</main>
+</div>
+</div>
+<!-- ============================================================== -->
+<!-- MODAL DIALOG OVERLAY (Clean, Centered, Focused Intelligence)  -->
+<!-- ============================================================== -->
+<div aria-labelledby="modal-title" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/30 backdrop-blur-sm transition-all" role="dialog">
+<!-- Modal Card Container -->
+<div class="w-full max-w-2xl bg-surface-container-lowest rounded-xl border border-outline-variant shadow-2xl overflow-hidden flex flex-col transition-all">
+<!-- Modal Header -->
+<div class="px-6 py-5 border-b border-outline-variant bg-surface-container-lowest flex items-start justify-between">
+<div class="flex items-start gap-3.5">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high text-primary flex items-center justify-center shrink-0 border border-secondary-fixed">
+<span class="material-symbols-outlined text-2xl" data-icon="cloud_upload" data-weight="fill" style="font-variation-settings: 'FILL' 1;">cloud_upload</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h2 class="font-headline-sm text-headline-sm font-semibold tracking-tight text-on-surface" id="modal-title">
+                Uploading &amp; Processing Files
+              </h2>
+<span class="inline-flex items-center gap-1 font-label-sm text-label-sm text-primary bg-surface-container-high px-2 py-0.5 rounded border border-secondary-fixed">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                Active
+              </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
+              Adding 4 documents to <span class="font-medium text-on-surface">Q4 Financial &amp; Regulatory Review</span>. Files will be ready for querying once indexed.
+            </p>
+</div>
+</div>
+<!-- Top Right Close Button -->
+<button aria-label="Close dialog" class="text-outline hover:text-on-surface hover:bg-surface-container-high p-1.5 rounded-lg transition-colors focus:ring-2 focus:ring-primary focus:outline-none" type="button">
+<span class="material-symbols-outlined text-xl" data-icon="close">close</span>
+</button>
+</div>
+<!-- Modal Body -->
+<div class="p-6 space-y-5 bg-surface-container-lowest max-h-[calc(85vh-150px)] overflow-y-auto">
+<!-- Overall Batch Summary Module -->
+<div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant space-y-3">
+<div class="flex items-center justify-between text-body-sm font-body-sm">
+<div class="flex items-center gap-2">
+<span class="font-medium text-on-surface">Overall Batch Progress:</span>
+<span class="font-semibold text-primary">2 of 4 files complete</span>
+<span class="font-label-sm text-label-sm text-outline">(58%)</span>
+</div>
+<div class="flex items-center gap-1.5 text-outline font-label-md text-label-md">
+<span class="material-symbols-outlined text-base" data-icon="schedule">schedule</span>
+<span>Estimated ~45 seconds remaining</span>
+</div>
+</div>
+<!-- Progress Bar Track -->
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full rounded-full transition-all duration-500 ease-out" style="width: 58%"></div>
+</div>
+<!-- Privacy Reassurance Badge -->
+<div class="flex items-center gap-2 pt-0.5">
+<span class="material-symbols-outlined text-sm text-tertiary" data-icon="lock">lock</span>
+<span class="font-body-sm text-body-sm text-outline">
+              Documents are processed securely with zero-retention privacy and AES-256 vector encryption.
+            </span>
+</div>
+</div>
+<!-- File Processing List -->
+<div class="space-y-3" role="list">
+<!-- Item 1: Processing (72%) -->
+<div class="p-4 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors flex items-center justify-between gap-4" role="listitem">
+<div class="flex items-center gap-3.5 min-w-0">
+<!-- File Type Badge / Icon -->
+<div class="w-10 h-10 rounded-lg bg-surface-container-low text-primary flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="material-symbols-outlined text-xl" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<p class="font-body-md text-body-md font-medium text-on-surface truncate">
+                    Q4_Financial_Statements_Audited.pdf
+                  </p>
+</div>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="font-label-sm text-label-sm text-outline">4.8 MB</span>
+<span class="text-outline text-xs">•</span>
+<span class="font-body-sm text-body-sm text-outline">Extracting table balance sheets</span>
+</div>
+</div>
+</div>
+<!-- Status Cluster -->
+<div class="flex items-center gap-4 shrink-0">
+<!-- Circular Progress SVG 72% -->
+<div class="flex items-center gap-2.5">
+<div class="relative w-7 h-7 flex items-center justify-center">
+<svg class="w-7 h-7 transform -rotate-90" viewbox="0 0 36 36">
+<circle class="text-surface-container-high" cx="18" cy="18" fill="none" r="14" stroke="currentColor" stroke-width="3"></circle>
+<circle class="text-primary-container transition-all duration-300" cx="18" cy="18" fill="none" r="14" stroke="currentColor" stroke-dasharray="88" stroke-dashoffset="24.6" stroke-linecap="round" stroke-width="3"></circle>
+</svg>
+<span class="absolute font-label-sm text-[0.625rem] font-semibold text-primary">72%</span>
+</div>
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-surface-container-high text-primary border border-secondary-fixed">
+                  Processing
+                </span>
+</div>
+<!-- Cancel / Remove Action -->
+<button aria-label="Remove Q4_Financial_Statements_Audited.pdf" class="text-outline hover:text-error hover:bg-error-container p-1 rounded-lg transition-colors focus:outline-none" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="close">close</span>
+</button>
+</div>
+</div>
+<!-- Item 2: Indexing (34%) -->
+<div class="p-4 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors flex items-center justify-between gap-4" role="listitem">
+<div class="flex items-center gap-3.5 min-w-0">
+<!-- File Type Badge / Icon -->
+<div class="w-10 h-10 rounded-lg bg-surface-container-low text-secondary flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="material-symbols-outlined text-xl" data-icon="article">article</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<p class="font-body-md text-body-md font-medium text-on-surface truncate">
+                    Master_Service_Agreement_v3.docx
+                  </p>
+</div>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="font-label-sm text-label-sm text-outline">1.4 MB</span>
+<span class="text-outline text-xs">•</span>
+<span class="font-body-sm text-body-sm text-outline">Generating semantic chunk vectors</span>
+</div>
+</div>
+</div>
+<!-- Status Cluster -->
+<div class="flex items-center gap-4 shrink-0">
+<!-- Circular Progress SVG 34% -->
+<div class="flex items-center gap-2.5">
+<div class="relative w-7 h-7 flex items-center justify-center">
+<svg class="w-7 h-7 transform -rotate-90" viewbox="0 0 36 36">
+<circle class="text-surface-container-high" cx="18" cy="18" fill="none" r="14" stroke="currentColor" stroke-width="3"></circle>
+<circle class="text-secondary transition-all duration-300" cx="18" cy="18" fill="none" r="14" stroke="currentColor" stroke-dasharray="88" stroke-dashoffset="58" stroke-linecap="round" stroke-width="3"></circle>
+</svg>
+<span class="absolute font-label-sm text-[0.625rem] font-semibold text-secondary">34%</span>
+</div>
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-surface-container-high text-primary border border-secondary-fixed">
+                  Indexing
+                </span>
+</div>
+<!-- Cancel / Remove Action -->
+<button aria-label="Remove Master_Service_Agreement_v3.docx" class="text-outline hover:text-error hover:bg-error-container p-1 rounded-lg transition-colors focus:outline-none" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="close">close</span>
+</button>
+</div>
+</div>
+<!-- Item 3: Ready (100% Complete) -->
+<div class="p-4 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors flex items-center justify-between gap-4" role="listitem">
+<div class="flex items-center gap-3.5 min-w-0">
+<!-- File Type Badge / Icon -->
+<div class="w-10 h-10 rounded-lg bg-surface-container-low text-primary flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="material-symbols-outlined text-xl" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<p class="font-body-md text-body-md font-medium text-on-surface truncate">
+                    Board_Resolution_Minutes_Signed.pdf
+                  </p>
+</div>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="font-label-sm text-label-sm text-outline">2.1 MB</span>
+<span class="text-outline text-xs">•</span>
+<span class="font-body-sm text-body-sm text-outline">18 pages vectorized • 4 entities indexed</span>
+</div>
+</div>
+</div>
+<!-- Status Cluster -->
+<div class="flex items-center gap-4 shrink-0">
+<div class="flex items-center gap-2.5">
+<div class="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
+<span class="material-symbols-outlined text-base" data-icon="check">check</span>
+</div>
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Ready
+                </span>
+</div>
+<!-- Empty spacer to match icon width for vertical alignment -->
+<div class="w-7 h-7 flex items-center justify-center">
+<span class="material-symbols-outlined text-base text-emerald-600" data-icon="task_alt">task_alt</span>
+</div>
+</div>
+</div>
+<!-- Item 4: Queued -->
+<div class="p-4 rounded-xl border border-outline-variant bg-surface-container-lowest hover:border-outline transition-colors flex items-center justify-between gap-4" role="listitem">
+<div class="flex items-center gap-3.5 min-w-0">
+<!-- File Type Badge / Icon -->
+<div class="w-10 h-10 rounded-lg bg-surface-container-low text-outline flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="material-symbols-outlined text-xl" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<p class="font-body-md text-body-md font-medium text-on-surface truncate">
+                    Regulatory_Disclosures_Appendix.pdf
+                  </p>
+</div>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="font-label-sm text-label-sm text-outline">6.3 MB</span>
+<span class="text-outline text-xs">•</span>
+<span class="font-body-sm text-body-sm text-outline">Waiting for slot...</span>
+</div>
+</div>
+</div>
+<!-- Status Cluster -->
+<div class="flex items-center gap-4 shrink-0">
+<div class="flex items-center gap-2.5">
+<div class="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center text-outline">
+<span class="material-symbols-outlined text-base" data-icon="hourglass_top">hourglass_top</span>
+</div>
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-surface-container-low text-outline border border-outline-variant">
+                  Queued
+                </span>
+</div>
+<!-- Cancel / Remove Action -->
+<button aria-label="Remove Regulatory_Disclosures_Appendix.pdf" class="text-outline hover:text-error hover:bg-error-container p-1 rounded-lg transition-colors focus:outline-none" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="close">close</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Modal Footer -->
+<div class="px-6 py-4 border-t border-outline-variant bg-surface-container-low flex flex-col sm:flex-row items-center justify-between gap-3">
+<!-- Reassuring Hint -->
+<div class="flex items-center gap-2 text-outline font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-base" data-icon="info">info</span>
+<span>Processing runs in background. You can safely minimize.</span>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+<button class="w-full sm:w-auto px-4 py-2 border border-outline-variant rounded-lg text-body-md font-body-md font-medium text-on-surface hover:bg-surface-container-lowest hover:border-outline transition-colors focus:ring-2 focus:ring-primary focus:outline-none" type="button">
+            Cancel Batch Upload
+          </button>
+<button class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2 bg-primary-container text-on-primary rounded-lg text-body-md font-body-md font-medium shadow-sm hover:opacity-95 transition-opacity focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none" type="button">
+<span>Continue in Background</span>
+<span class="material-symbols-outlined text-base" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</body></html>

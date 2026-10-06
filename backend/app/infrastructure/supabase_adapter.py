@@ -380,12 +380,15 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase create_box retry (attempt {rs.attempt_number})"),
     )
-    def create_box(self, name: str, user_id: str, description: Optional[str] = None) -> dict:
-        response = self.client.table("boxes").insert({
+    def create_box(self, name: str, user_id: str, description: Optional[str] = None, domain: Optional[str] = None) -> dict:
+        payload = {
             "name": name,
             "user_id": user_id,
             "description": description
-        }).execute()
+        }
+        if domain:
+            payload["domain"] = domain
+        response = self.client.table("boxes").insert(payload).execute()
         return response.data[0] if response.data else {}  # type: ignore
 
     @retry(

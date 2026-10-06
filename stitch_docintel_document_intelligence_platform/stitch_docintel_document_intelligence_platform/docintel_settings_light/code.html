@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DocIntel - Settings</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Hanken Grotesk, Inter, JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-fixed-dim": "#c0c1ff",
+            "primary-container": "#4f46e5",
+            "primary": "#3525cd",
+            "on-tertiary-fixed": "#001e2f",
+            "on-tertiary-fixed-variant": "#004c6e",
+            "on-primary-fixed": "#0f0069",
+            "surface-variant": "#dae2fd",
+            "surface-container-high": "#e2e7ff",
+            "secondary-container": "#6063ee",
+            "tertiary-container": "#006693",
+            "surface-dim": "#d2d9f4",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "error-container": "#ffdad6",
+            "on-surface": "#131b2e",
+            "tertiary": "#004d70",
+            "on-secondary-fixed": "#07006c",
+            "on-error": "#ffffff",
+            "on-primary": "#ffffff",
+            "background": "#faf8ff",
+            "secondary": "#4648d4",
+            "tertiary-fixed-dim": "#89ceff",
+            "surface-container-highest": "#dae2fd",
+            "on-primary-fixed-variant": "#3323cc",
+            "tertiary-fixed": "#c9e6ff",
+            "outline": "#777587",
+            "inverse-primary": "#c3c0ff",
+            "on-secondary-container": "#fffbff",
+            "primary-fixed": "#e2dfff",
+            "inverse-on-surface": "#eef0ff",
+            "on-primary-container": "#dad7ff",
+            "outline-variant": "#c7c4d8",
+            "on-surface-variant": "#464555",
+            "primary-fixed-dim": "#c3c0ff",
+            "on-tertiary": "#ffffff",
+            "on-tertiary-container": "#b8e0ff",
+            "on-secondary": "#ffffff",
+            "secondary-fixed": "#e1e0ff",
+            "surface-container-lowest": "#ffffff",
+            "surface-bright": "#faf8ff",
+            "surface-tint": "#4d44e3",
+            "surface-container": "#eaedff",
+            "surface-container-low": "#f2f3ff",
+            "on-background": "#131b2e",
+            "on-error-container": "#93000a",
+            "surface": "#faf8ff",
+            "error": "#ba1a1a",
+            "inverse-surface": "#283044"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "margin": "2rem",
+            "space-lg": "1.5rem",
+            "gutter-sm": "1rem",
+            "space-xs": "0.25rem",
+            "space-xl": "2.5rem",
+            "space-sm": "0.5rem",
+            "space-md": "1rem",
+            "margin-mobile": "1rem",
+            "gutter": "1.5rem"
+          },
+          "fontFamily": {
+            "headline-sm": ["Hanken Grotesk"],
+            "label-sm": ["JetBrains Mono"],
+            "body-lg": ["Inter"],
+            "headline-md": ["Hanken Grotesk"],
+            "body-md": ["Inter"],
+            "body-sm": ["Inter"],
+            "display": ["Hanken Grotesk"],
+            "headline-lg": ["Hanken Grotesk"],
+            "headline-lg-mobile": ["Hanken Grotesk"],
+            "label-md": ["JetBrains Mono"]
+          },
+          "fontSize": {
+            "headline-sm": ["1.125rem", { lineHeight: "1.4", letterSpacing: "-0.015em", fontWeight: "600" }],
+            "label-sm": ["0.6875rem", { lineHeight: "1.35", letterSpacing: "0.02em", fontWeight: "500" }],
+            "body-lg": ["1rem", { lineHeight: "1.6", letterSpacing: "-0.01em", fontWeight: "400" }],
+            "headline-md": ["1.5rem", { lineHeight: "1.3", letterSpacing: "-0.02em", fontWeight: "600" }],
+            "body-md": ["0.875rem", { lineHeight: "1.55", letterSpacing: "0em", fontWeight: "400" }],
+            "body-sm": ["0.75rem", { lineHeight: "1.5", letterSpacing: "0.01em", fontWeight: "400" }],
+            "display": ["3rem", { lineHeight: "1.15", letterSpacing: "-0.03em", fontWeight: "700" }],
+            "headline-lg": ["2.25rem", { lineHeight: "1.2", letterSpacing: "-0.025em", fontWeight: "600" }],
+            "headline-lg-mobile": ["1.75rem", { lineHeight: "1.25", letterSpacing: "-0.02em", fontWeight: "600" }],
+            "label-md": ["0.8125rem", { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "500" }]
+          }
+        },
+      },
+    }
+  </script>
+</head>
+<body class="bg-background text-on-surface antialiased min-h-screen flex selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- ========================================================================= -->
+<!-- SIDE NAVIGATION (Shared Component: SideNavBar)                            -->
+<!-- ========================================================================= -->
+<aside class="fixed left-0 top-0 h-full z-40 p-4 h-screen w-64 flex flex-col shrink-0 bg-surface-container-lowest border-r border-outline-variant">
+<!-- Brand Header -->
+<div class="flex items-center gap-3 px-2 py-3 mb-4">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-on-primary shadow-sm">
+<span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+</div>
+<div>
+<div class="font-headline-sm text-headline-sm font-semibold tracking-tight text-on-surface leading-none">DocIntel</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant text-[11px] mt-0.5">Precision AI</div>
+</div>
+</div>
+<!-- Primary CTA: New Box -->
+<div class="mb-5">
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-body-md text-body-md font-medium transition-colors duration-150 shadow-sm active:bg-secondary">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>New Box</span>
+</button>
+</div>
+<!-- Navigation Tab List -->
+<!-- Active State Logic: Current page is Settings -> Active Tab is Settings -->
+<nav class="flex-1 space-y-1">
+<!-- Dashboard -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Dashboard</span>
+</a>
+<!-- My Boxes -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">folder</span>
+<span>My Boxes</span>
+</a>
+<!-- Knowledge Base -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">auto_awesome</span>
+<span>Knowledge Base</span>
+</a>
+<!-- Settings (ACTIVE) -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-container-high text-primary font-body-md text-body-md font-medium" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<!-- Footer Profile Tab -->
+<div class="pt-4 border-t border-outline-variant mt-auto">
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-150 cursor-pointer">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary font-headline-sm text-body-sm font-semibold">
+          EV
+        </div>
+<div class="flex-1 min-w-0">
+<div class="font-body-md text-body-md font-medium text-on-surface truncate">Elena V.</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant truncate">Lead Analyst</div>
+</div>
+<span class="material-symbols-outlined text-[18px] text-outline">unfold_more</span>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- MAIN CONTENT WRAPPER                                                      -->
+<!-- ========================================================================= -->
+<div class="flex-1 flex flex-col ml-64 min-w-0">
+<!-- Top Navigation Bar (Shared Component: TopNavBar) -->
+<header class="h-14 bg-surface-container-lowest border-b border-outline-variant flex items-center justify-between px-8 sticky top-0 z-30">
+<!-- Search on Left -->
+<div class="relative w-80">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">search</span>
+<input class="w-full bg-background border border-outline-variant rounded-lg pl-9 pr-4 py-1.5 font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" placeholder="Search settings, keys, parameters..." type="text"/>
+</div>
+<!-- Trailing Action Icons & Avatar -->
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-on-surface p-1.5 rounded-lg hover:bg-surface-container transition-colors relative" title="Notifications">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary-container"></span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface p-1.5 rounded-lg hover:bg-surface-container transition-colors" title="Documentation &amp; Help">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+</button>
+<div class="h-4 w-px bg-outline-variant"></div>
+<button class="flex items-center gap-2 text-on-surface hover:text-primary transition-colors pl-1">
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-primary font-medium border border-outline-variant">PRO ENCLAVE</span>
+</button>
+</div>
+</header>
+<!-- Page Body Canvas -->
+<main class="flex-1 p-8 max-w-5xl pb-28">
+<!-- Header Zone -->
+<div class="mb-8">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">Configuration &amp; Governance</span>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface font-semibold tracking-tight">Settings</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">
+          Manage your AI model configurations, workspace security policies, and report export presets.
+        </p>
+</div>
+<!-- Settings Cards Stack -->
+<div class="space-y-6">
+<!-- ===================================================================== -->
+<!-- SECTION 1: AI MODEL PREFERENCES                                       -->
+<!-- ===================================================================== -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden transition-all duration-150">
+<!-- Card Header -->
+<div class="px-6 py-5 border-b border-outline-variant flex items-start gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[22px]">psychology</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">AI Model Preferences</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-0.5">
+                Configure inference parameters, default grounding engines, and citation sensitivity for Box queries.
+              </p>
+</div>
+</div>
+<!-- Card Content / Fields -->
+<div class="p-6 space-y-6">
+<!-- Grid: Engine & Context Window -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Default Synthesis Engine -->
+<div>
+<label class="block font-body-md text-body-md font-medium text-on-surface mb-2">
+                  Default Synthesis Engine
+                </label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3.5 py-2.5 font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all pr-10 cursor-pointer">
+<option selected="">Claude 3.5 Sonnet (Default)</option>
+<option>GPT-4o Precision RAG</option>
+<option>Llama 3.3 70B</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none text-[20px]">
+                    arrow_drop_down
+                  </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5">
+                  Primary backbone for multi-document synthesis and entity extraction.
+                </p>
+</div>
+<!-- Context Window Allocation -->
+<div>
+<label class="block font-body-md text-body-md font-medium text-on-surface mb-2">
+                  Context Window Allocation
+                </label>
+<div class="grid grid-cols-2 gap-2">
+<button class="px-3 py-2 rounded-lg border border-primary-container bg-surface-container-high text-primary font-body-md text-body-md font-medium flex items-center justify-center gap-1.5 transition-all text-center" type="button">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span>128k Tokens</span>
+</button>
+<button class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-body-md text-body-md transition-all text-center" type="button">
+<span>200k Deep Cross</span>
+</button>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5">
+                  Deep allocation prioritizes wider contextual retention across entire folders.
+                </p>
+</div>
+</div>
+<!-- Retrieval Temperature Slider -->
+<div class="pt-2 border-t border-outline-variant/60">
+<div class="flex items-center justify-between mb-2">
+<label class="font-body-md text-body-md font-medium text-on-surface">
+                  Retrieval Temperature
+                </label>
+<span class="font-label-sm text-label-sm px-2.5 py-0.5 rounded bg-surface-container-high text-primary font-semibold border border-outline-variant">
+                  0.2 — Strict Factuality
+                </span>
+</div>
+<input class="w-full h-1.5 bg-surface-container rounded-lg appearance-none cursor-pointer accent-primary-container focus:outline-none" max="1" min="0" step="0.05" type="range" value="0.2"/>
+<div class="flex justify-between items-center mt-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant text-[11px]">0.0 (Deterministic)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant text-[11px]">0.5 (Balanced)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant text-[11px]">1.0 (Creative Inference)</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
+                Lower values strictly limit hallucination and enforce verifiable document citations.
+              </p>
+</div>
+<!-- Toggles for Model Preferences -->
+<div class="space-y-4 pt-3 border-t border-outline-variant/60">
+<!-- Toggle 1: Strict Citation Grounding -->
+<div class="flex items-start justify-between gap-4">
+<div>
+<div class="font-body-md text-body-md font-medium text-on-surface">Strict Citation Grounding</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                    Only synthesize statements directly backed by cited passages; disallows non-attributed inferences.
+                  </div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer shrink-0">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container rounded-full peer peer-checked:bg-primary-container peer-checked:after:translate-x-full peer-checked:after:border-surface-container-lowest after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+</label>
+</div>
+<!-- Toggle 2: Include Coordinates -->
+<div class="flex items-start justify-between gap-4">
+<div>
+<div class="font-body-md text-body-md font-medium text-on-surface">Include Page &amp; Paragraph Coordinates</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                    Attaches precise bounding box coordinates to citation chips for instant one-click PDF jumps.
+                  </div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer shrink-0">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container rounded-full peer peer-checked:bg-primary-container peer-checked:after:translate-x-full peer-checked:after:border-surface-container-lowest after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+</label>
+</div>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- SECTION 2: ORGANIZATION SECURITY RULES                                -->
+<!-- ===================================================================== -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden transition-all duration-150">
+<!-- Card Header -->
+<div class="px-6 py-5 border-b border-outline-variant flex items-start gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[22px]">shield</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Organization Security Rules</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-0.5">
+                Enforce perimeter isolation, data retention constraints, and vector privacy boundaries.
+              </p>
+</div>
+</div>
+<!-- Card Content / Fields -->
+<div class="p-6 space-y-6">
+<!-- Toggles -->
+<div class="space-y-4">
+<!-- Zero Retention Ingestion -->
+<div class="flex items-start justify-between gap-4">
+<div>
+<div class="font-body-md text-body-md font-medium text-on-surface">Zero-Retention File Ingestion</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                    Immediately purge raw document binaries from cache once semantic chunks and embeddings are generated.
+                  </div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer shrink-0">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container rounded-full peer peer-checked:bg-primary-container peer-checked:after:translate-x-full peer-checked:after:border-surface-container-lowest after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+</label>
+</div>
+<!-- Strict Box Isolation (Locked) -->
+<div class="flex items-start justify-between gap-4 p-3 rounded-lg bg-surface-container/50 border border-outline-variant/60">
+<div class="pr-2">
+<div class="flex items-center gap-2">
+<span class="font-body-md text-body-md font-medium text-on-surface">Strict Box Isolation</span>
+<span class="inline-flex items-center gap-1 font-label-sm text-label-sm text-tertiary bg-tertiary-fixed px-2 py-0.5 rounded font-medium border border-tertiary/20">
+<span class="material-symbols-outlined text-[13px]">lock</span>
+                      Enforced by Org Admin
+                    </span>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                    Forbid any cross-pollination of embeddings or context between distinct Boxes.
+                  </div>
+</div>
+<div class="shrink-0 flex items-center h-full pt-1">
+<!-- Disabled active switch indicating policy locked -->
+<div class="w-11 h-6 bg-primary-container/80 rounded-full relative cursor-not-allowed opacity-90 after:content-[''] after:absolute after:top-0.5 after:right-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 shadow-inner"></div>
+</div>
+</div>
+</div>
+<!-- Organization ID & Jurisdiction -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-outline-variant/60">
+<!-- Org ID / Tenant Enclave Key -->
+<div>
+<label class="block font-body-md text-body-md font-medium text-on-surface mb-2">
+                  Organization ID / Tenant Enclave Key
+                </label>
+<div class="flex rounded-lg shadow-sm">
+<input class="block w-full rounded-l-lg bg-surface-container font-label-sm text-label-sm text-on-surface border border-outline-variant py-2.5 px-3 select-all focus:outline-none focus:ring-1 focus:ring-primary" readonly="" type="text" value="org_enclave_94a8f21e09c8"/>
+<button class="inline-flex items-center px-3.5 rounded-r-lg border border-l-0 border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors" title="Copy Key" type="button">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5">
+                  Unique hardware-isolated enclave identifier.
+                </p>
+</div>
+<!-- Vector Storage Jurisdiction -->
+<div>
+<label class="block font-body-md text-body-md font-medium text-on-surface mb-2">
+                  Vector Storage Jurisdiction
+                </label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3.5 py-2.5 font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all pr-10 cursor-pointer">
+<option selected="">US-East (Virginia - SOC2 Enclave)</option>
+<option>EU-West (Frankfurt - GDPR Compliant)</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none text-[20px]">
+                    arrow_drop_down
+                  </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5">
+                  Sovereign boundary where chunk indices are stored and processed.
+                </p>
+</div>
+</div>
+<!-- Auto-Session Expiration -->
+<div class="pt-2 border-t border-outline-variant/60">
+<div class="max-w-md">
+<label class="block font-body-md text-body-md font-medium text-on-surface mb-2">
+                  Auto-Session Expiration
+                </label>
+<div class="flex items-center gap-3">
+<input class="w-40 bg-surface-container-lowest border border-outline-variant rounded-lg px-3.5 py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" type="text" value="60 minutes"/>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Inactivity threshold before analyst authentication expires.</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- ===================================================================== -->
+<!-- SECTION 3: EXPORT FORMATS & DEFAULTS                                  -->
+<!-- ===================================================================== -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden transition-all duration-150">
+<!-- Card Header -->
+<div class="px-6 py-5 border-b border-outline-variant flex items-start gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[22px]">output</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Export Formats &amp; Defaults</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-0.5">
+                Define default formatting standards when generating synthesized briefs, audit trails, and citation manifests.
+              </p>
+</div>
+</div>
+<!-- Card Content / Fields -->
+<div class="p-6 space-y-6">
+<!-- Default Export File Type (Selectable Cards) -->
+<div>
+<label class="block font-body-md text-body-md font-medium text-on-surface mb-3">
+                Default Export File Type
+              </label>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+<!-- Option 1: PDF Brief (Selected) -->
+<label class="border-2 border-primary-container bg-surface-container-high/60 rounded-xl p-4 flex flex-col justify-between cursor-pointer transition-all hover:border-primary">
+<div class="flex items-center justify-between mb-2">
+<span class="material-symbols-outlined text-primary text-[24px]">picture_as_pdf</span>
+<input checked="" class="text-primary-container focus:ring-primary" name="export_type" type="radio"/>
+</div>
+<div>
+<div class="font-body-md text-body-md font-semibold text-on-surface">PDF Brief</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Formatted executive report with cover and bookmarks</div>
+</div>
+</label>
+<!-- Option 2: Markdown -->
+<label class="border border-outline-variant bg-surface-container-lowest hover:bg-surface-container/40 rounded-xl p-4 flex flex-col justify-between cursor-pointer transition-all hover:border-outline">
+<div class="flex items-center justify-between mb-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[24px]">code</span>
+<input class="text-primary-container focus:ring-primary" name="export_type" type="radio"/>
+</div>
+<div>
+<div class="font-body-md text-body-md font-semibold text-on-surface">Markdown (.md)</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Clean markdown formatted for documentation repos</div>
+</div>
+</label>
+<!-- Option 3: JSON Manifest -->
+<label class="border border-outline-variant bg-surface-container-lowest hover:bg-surface-container/40 rounded-xl p-4 flex flex-col justify-between cursor-pointer transition-all hover:border-outline">
+<div class="flex items-center justify-between mb-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[24px]">data_object</span>
+<input class="text-primary-container focus:ring-primary" name="export_type" type="radio"/>
+</div>
+<div>
+<div class="font-body-md text-body-md font-semibold text-on-surface">JSON Manifest</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Full citation chunks and confidence scores metadata</div>
+</div>
+</label>
+</div>
+</div>
+<!-- Citation Footnote Style -->
+<div class="pt-2 border-t border-outline-variant/60">
+<label class="block font-body-md text-body-md font-medium text-on-surface mb-2">
+                Citation Footnote Style
+              </label>
+<div class="max-w-md relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3.5 py-2.5 font-body-md text-body-md text-on-surface appearance-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all pr-10 cursor-pointer">
+<option selected="">Bluebook Legal Format</option>
+<option>IEEE Academic</option>
+<option>Inline Verified Chips</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none text-[20px]">
+                  arrow_drop_down
+                </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5">
+                Defines the structure for appendices, pinpoint citations, and source indexes in synthesized reports.
+              </p>
+</div>
+<!-- Export Toggles -->
+<div class="space-y-4 pt-3 border-t border-outline-variant/60">
+<!-- Toggle 1: Cryptographic Verification Hash (Active) -->
+<div class="flex items-start justify-between gap-4">
+<div>
+<div class="font-body-md text-body-md font-medium text-on-surface">Include Cryptographic Verification Hash</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                    Appends an SHA-256 integrity stamp and verifiable provenance signature to exported documents.
+                  </div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer shrink-0">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container rounded-full peer peer-checked:bg-primary-container peer-checked:after:translate-x-full peer-checked:after:border-surface-container-lowest after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+</label>
+</div>
+<!-- Toggle 2: Redact PII in Summaries (Inactive) -->
+<div class="flex items-start justify-between gap-4">
+<div>
+<div class="font-body-md text-body-md font-medium text-on-surface">Redact PII in Summaries</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+                    Automatically masks social security numbers, taxpayer IDs, and personal identifiers before compilation.
+                  </div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer shrink-0">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container rounded-full peer peer-checked:bg-primary-container peer-checked:after:translate-x-full peer-checked:after:border-surface-container-lowest after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+</label>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- ========================================================================= -->
+<!-- DOCKED STICKY FOOTER ACTIONS BAR                                         -->
+<!-- ========================================================================= -->
+<div class="fixed bottom-0 right-0 left-64 bg-surface-container-lowest/90 backdrop-blur-md border-t border-outline-variant px-8 py-3.5 flex items-center justify-between z-30">
+<div class="flex items-center gap-2 text-on-surface-variant font-body-sm text-body-sm">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span>All policies synched with enterprise tenant cluster</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-on-surface font-body-md text-body-md font-medium transition-colors duration-150" type="button">
+          Cancel
+        </button>
+<button class="px-5 py-2 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-body-md text-body-md font-medium transition-colors duration-150 shadow-sm flex items-center gap-2" type="button">
+<span class="material-symbols-outlined text-[18px]">save</span>
+<span>Save Changes</span>
+</button>
+</div>
+</div>
+</div>
+</body></html>

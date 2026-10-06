@@ -8,8 +8,8 @@ class BoxService:
     def __init__(self, db: SupabaseAdapter):
         self.db = db
 
-    def create_box(self, name: str, user_id: str, description: str = None) -> dict:
-        return self.db.create_box(name, user_id, description)
+    def create_box(self, name: str, user_id: str, description: str = None, domain: str = None) -> dict:
+        return self.db.create_box(name, user_id, description, domain)
 
     def list_boxes(self, user_id: str) -> list[dict]:
         return self.db.list_boxes(user_id)

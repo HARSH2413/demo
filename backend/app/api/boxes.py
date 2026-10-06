@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/v1/boxes", tags=["Boxes"])
 class BoxCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
+    domain: Optional[str] = Field(None, max_length=64)
 
 class BoxUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -30,7 +31,8 @@ def create_box(
         box = box_service.create_box(
             name=box_name,
             user_id=user.user_id,
-            description=data.description
+            description=data.description,
+            domain=data.domain
         )
         return {"status": "success", "data": box}
     except HTTPException:
@@ -62,10 +64,18 @@ def get_box(
     box_service: BoxService = Depends(get_box_service),
     user: UserContext = Depends(get_current_user)
 ):
-    box = box_service.get_box(box_id=box_id, user_id=user.user_id)
-    if not box:
-        raise HTTPException(status_code=404, detail="Box not found or unauthorized")
-    return {"status": "success", "data": box}
+    try:
+        box = box_service.get_box(box_id=box_id, user_id=user.user_id)
+        if not box:
+            raise HTTPException(status_code=404, detail="Box not found or unauthorized")
+        return {"status": "success", "data": box}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if "uuid" in str(e).lower() or "invalid" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Box not found (invalid ID format)")
+        logger.exception(f"Box fetch failed: {e}")
+        raise HTTPException(status_code=500, detail="Unable to fetch box.")
 
 @router.patch("/{box_id}")
 def update_box(

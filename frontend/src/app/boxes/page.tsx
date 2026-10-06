@@ -11,7 +11,11 @@ export default async function BoxesPage() {
       redirect('/login')
   }
 
+  const meta = (user.user_metadata || {}) as Record<string, string | undefined>
+  const fullName = meta.full_name || meta.name || user.email?.split('@')[0] || ''
+  const userName = fullName.split(' ')[0]
+
   return (
-    <BoxesClient />
+    <BoxesClient userName={userName} />
   )
 }

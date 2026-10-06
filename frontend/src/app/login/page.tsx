@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { login } from '../auth/actions'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Sparkles } from 'lucide-react'
 import { SubmitButton } from '@/components/auth/SubmitButton'
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
 
@@ -16,18 +16,18 @@ export default function LoginPage({
   const [showPassword, setShowPassword] = useState(false);
   
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 selection:bg-indigo-500/30">
-      <Link href="/" className="absolute top-8 left-8 text-neutral-400 hover:text-white transition-colors animate-fade-in">
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4 selection:bg-indigo-100 selection:text-indigo-900">
+      <Link href="/" className="absolute top-8 left-8 text-slate-500 hover:text-slate-900 transition-colors font-medium text-sm">
         ← Back to home
       </Link>
       
-      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 p-8 rounded-2xl shadow-2xl animate-fade-in-up">
+      <div className="w-full max-w-md bg-white border border-slate-200 p-8 rounded-2xl shadow-xl shadow-slate-200/50">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white text-xl shadow-lg shadow-indigo-500/20 mb-4">
-            D
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-4">
+            <Sparkles className="w-6 h-6 text-indigo-600" />
           </div>
-          <h2 className="text-2xl font-bold text-white">Welcome back</h2>
-          <p className="text-neutral-400 text-sm mt-2">Log in to your workspace</p>
+          <h2 className="text-2xl font-bold text-slate-900 font-headline tracking-tight">Welcome back</h2>
+          <p className="text-slate-500 text-sm mt-1.5">Log in to your workspace</p>
         </div>
 
         {/* Google Sign-In */}
@@ -36,22 +36,22 @@ export default function LoginPage({
         {/* Divider */}
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-neutral-800"></div>
+            <div className="w-full border-t border-slate-200"></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-3 bg-neutral-900 text-neutral-500">or continue with email</span>
+            <span className="px-3 bg-white text-slate-500 font-medium">or continue with email</span>
           </div>
         </div>
 
         <form action={login} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <label className="text-sm text-neutral-300 font-medium" htmlFor="email">
+            <label className="text-sm text-slate-700 font-semibold tracking-tight" htmlFor="email">
               Email
             </label>
             <input
               id="email"
               name="email"
-              className="px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-lg text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all text-sm shadow-sm"
               placeholder="you@example.com"
               type="email"
               autoComplete="email"
@@ -61,17 +61,16 @@ export default function LoginPage({
 
           <div className="flex flex-col gap-2 relative">
             <div className="flex justify-between items-center">
-              <label className="text-sm text-neutral-300 font-medium" htmlFor="password">
+              <label className="text-sm text-slate-700 font-semibold tracking-tight" htmlFor="password">
                 Password
               </label>
-              {/* If password recovery is supported in actions.ts, we can add a link here, but it's not currently implemented in auth actions. */}
             </div>
             
             <div className="relative">
               <input
                 id="password"
                 name="password"
-                className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-lg text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all pr-12"
+                className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 transition-all pr-12 text-sm shadow-sm"
                 placeholder="••••••••"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
@@ -80,32 +79,34 @@ export default function LoginPage({
               <button 
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
           {params?.error && (
-            <div className="text-sm text-red-400 bg-red-400/10 p-3 rounded-lg text-center border border-red-500/20 animate-fade-in">
+            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg text-center border border-red-200">
               {params.error}
             </div>
           )}
 
           {params?.success && (
-            <div className="text-sm text-emerald-400 bg-emerald-400/10 p-3 rounded-lg text-center border border-emerald-500/20 animate-fade-in">
+            <div className="text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg text-center border border-emerald-200">
               {params.success}
             </div>
           )}
 
-          <SubmitButton text="Log In" loadingText="Logging in..." />
+          <div className="mt-2">
+            <SubmitButton text="Log In" loadingText="Logging in..." />
+          </div>
         </form>
 
-        <div className="mt-8 text-center text-sm text-neutral-400">
+        <div className="mt-8 text-center text-sm text-slate-500">
           Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+          <Link href="/signup" className="text-indigo-600 hover:text-indigo-700 font-semibold transition-colors">
             Create account
           </Link>
         </div>

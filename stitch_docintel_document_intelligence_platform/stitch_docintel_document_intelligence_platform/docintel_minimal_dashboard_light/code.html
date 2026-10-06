@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DocIntel — Dashboard</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-secondary": "#ffffff",
+            "surface-container-highest": "#e2e8f0",
+            "surface-container": "#f8fafc",
+            "on-primary-fixed-variant": "#3323cc",
+            "surface-container-lowest": "#ffffff",
+            "surface": "#faf8ff",
+            "outline": "#cbd5e1",
+            "inverse-surface": "#0f172a",
+            "primary": "#4f46e5",
+            "on-primary-container": "#dad7ff",
+            "surface-variant": "#f1f5f9",
+            "on-primary": "#ffffff",
+            "surface-container-low": "#f8fafc",
+            "outline-variant": "#e2e8f0",
+            "on-surface": "#0f172a",
+            "primary-container": "#4338ca",
+            "on-background": "#0f172a",
+            "on-surface-variant": "#64748b",
+            "background": "#f8fafc",
+            "secondary": "#475569",
+            "surface-container-high": "#eef2ff"
+          },
+          "fontFamily": {
+            "headline": ["Hanken Grotesk", "sans-serif"],
+            "display": ["Hanken Grotesk", "sans-serif"],
+            "body": ["Inter", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-background text-on-surface font-body min-h-screen flex selection:bg-primary selection:text-on-primary antialiased">
+<!-- SideNavBar Anchor Component -->
+<aside class="fixed left-0 top-0 h-full z-40 p-4 h-screen w-64 flex flex-col shrink-0 bg-white border-r border-slate-200">
+<!-- Header Brand Section -->
+<div class="flex items-center gap-3 px-2 py-3 mb-6">
+<div class="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-primary font-semibold text-sm">
+        DI
+      </div>
+<div>
+<div class="font-headline text-base font-semibold tracking-tight text-slate-900">DocIntel</div>
+<div class="font-body text-xs text-slate-500 font-normal">Precision AI</div>
+</div>
+</div>
+<!-- Quick Action from Anchor -->
+<div class="mb-6 px-1">
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-slate-50 border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-slate-700 hover:text-indigo-600 font-body text-sm font-medium transition-all duration-150">
+<span class="material-symbols-outlined text-sm text-primary" data-icon="add">add</span>
+        New Box
+      </button>
+</div>
+<!-- Primary Navigation Elements -->
+<nav class="space-y-1 flex-1 font-body text-sm font-medium tracking-tight">
+<!-- Active Tab: Dashboard -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-indigo-50 text-primary font-semibold transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<!-- Inactive Tab: My Boxes -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="folder">folder</span>
+<span>My Boxes</span>
+</a>
+<!-- Inactive Tab: Knowledge Base -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="auto_awesome">auto_awesome</span>
+<span>Knowledge Base</span>
+</a>
+<!-- Inactive Tab: Settings -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<!-- Footer Profile Tab Anchor -->
+<div class="pt-4 border-t border-slate-200">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors duration-150 font-body text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="account_circle">account_circle</span>
+<span>Profile</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas Shell -->
+<div class="ml-64 flex-1 flex flex-col min-h-screen">
+<!-- TopNavBar Anchor Component -->
+<header class="flex justify-between items-center h-14 px-8 w-full bg-white border-b border-slate-200 sticky top-0 z-30">
+<!-- Search Trigger from TopNavBar Anchor -->
+<div class="relative w-72">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400" data-icon="search">search</span>
+<input class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none transition-all" placeholder="Search..." type="text"/>
+</div>
+<!-- Trailing Action Cluster -->
+<div class="flex items-center gap-4">
+<button aria-label="Notifications" class="text-slate-500 hover:text-slate-900 transition-colors p-1">
+<span class="material-symbols-outlined text-xl" data-icon="notifications">notifications</span>
+</button>
+<button aria-label="Help" class="text-slate-500 hover:text-slate-900 transition-colors p-1">
+<span class="material-symbols-outlined text-xl" data-icon="help_outline">help_outline</span>
+</button>
+<div class="w-px h-4 bg-slate-200 mx-1"></div>
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center text-xs font-semibold text-primary">
+            E
+          </div>
+<span class="text-xs font-medium text-slate-700">Elena V.</span>
+</div>
+</div>
+</header>
+<!-- Main Workspace Content -->
+<main class="flex-1 px-10 py-12 max-w-5xl w-full mx-auto">
+<!-- Welcome Header (Calm, Polite, Ultra-Minimal) -->
+<section class="mb-12">
+<h1 class="text-2xl font-semibold tracking-tight text-slate-900 font-headline mb-2">Good morning, Elena</h1>
+<p class="text-sm text-slate-500 font-normal">Select a Box to start querying or create a new workspace.</p>
+</section>
+<!-- Search & Primary Action Row -->
+<section class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
+<div class="relative flex-1 max-w-md">
+<span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-base text-slate-400" data-icon="search">search</span>
+<input class="w-full bg-white border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none transition-all shadow-sm" placeholder="Search boxes..." type="text"/>
+</div>
+<button class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-indigo-700 text-white font-medium text-sm transition-colors duration-150 shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-base" data-icon="add">add</span>
+<span>Create Box</span>
+</button>
+</section>
+<!-- Filter Tabs Row -->
+<section class="flex items-center gap-6 mb-6 border-b border-slate-200 pb-3">
+<button class="text-xs font-semibold text-primary transition-colors relative py-1">
+          All Boxes
+          <span class="absolute bottom-[-13px] left-0 right-0 h-0.5 bg-primary rounded-full"></span>
+</button>
+<button class="text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors py-1">
+          Recent
+        </button>
+<button class="text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors py-1">
+          Favorites
+        </button>
+</section>
+<!-- Boxes Minimal Grid -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Box Card 1 -->
+<div class="group p-5 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all duration-150 flex flex-col justify-between h-44 cursor-pointer">
+<div>
+<div class="flex items-start justify-between gap-2 mb-2">
+<h2 class="text-base font-semibold text-slate-900 tracking-tight group-hover:text-primary transition-colors">Q3 M&amp;A Due Diligence</h2>
+<span class="material-symbols-outlined text-slate-400 opacity-0 group-hover:opacity-100 group-hover:text-primary transition-opacity text-base" data-icon="arrow_outward">arrow_outward</span>
+</div>
+<p class="text-xs text-slate-500 leading-relaxed line-clamp-2">
+              Financial statements, clean-room audit logs, and target entity legal filings for transaction review.
+            </p>
+</div>
+<div class="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-medium">
+              14 documents
+            </span>
+<span class="text-slate-400 text-[11px]">Updated 2h ago</span>
+</div>
+</div>
+<!-- Box Card 2 -->
+<div class="group p-5 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all duration-150 flex flex-col justify-between h-44 cursor-pointer">
+<div>
+<div class="flex items-start justify-between gap-2 mb-2">
+<h2 class="text-base font-semibold text-slate-900 tracking-tight group-hover:text-primary transition-colors">Vendor Contracts 2024</h2>
+<span class="material-symbols-outlined text-slate-400 opacity-0 group-hover:opacity-100 group-hover:text-primary transition-opacity text-base" data-icon="arrow_outward">arrow_outward</span>
+</div>
+<p class="text-xs text-slate-500 leading-relaxed line-clamp-2">
+              Active enterprise master service agreements, cloud SLA documentation, and renegotiation briefs.
+            </p>
+</div>
+<div class="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-medium">
+              8 documents
+            </span>
+<span class="text-slate-400 text-[11px]">Updated 5h ago</span>
+</div>
+</div>
+<!-- Box Card 3 -->
+<div class="group p-5 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all duration-150 flex flex-col justify-between h-44 cursor-pointer">
+<div>
+<div class="flex items-start justify-between gap-2 mb-2">
+<h2 class="text-base font-semibold text-slate-900 tracking-tight group-hover:text-primary transition-colors">Product Specs &amp; RFPs</h2>
+<span class="material-symbols-outlined text-slate-400 opacity-0 group-hover:opacity-100 group-hover:text-primary transition-opacity text-base" data-icon="arrow_outward">arrow_outward</span>
+</div>
+<p class="text-xs text-slate-500 leading-relaxed line-clamp-2">
+              Architecture blueprints, technical API requirements, and client procurement inquiries.
+            </p>
+</div>
+<div class="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-medium">
+              21 documents
+            </span>
+<span class="text-slate-400 text-[11px]">Updated 1d ago</span>
+</div>
+</div>
+<!-- Box Card 4 -->
+<div class="group p-5 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all duration-150 flex flex-col justify-between h-44 cursor-pointer">
+<div>
+<div class="flex items-start justify-between gap-2 mb-2">
+<h2 class="text-base font-semibold text-slate-900 tracking-tight group-hover:text-primary transition-colors">Legal &amp; Compliance Guidelines</h2>
+<span class="material-symbols-outlined text-slate-400 opacity-0 group-hover:opacity-100 group-hover:text-primary transition-opacity text-base" data-icon="arrow_outward">arrow_outward</span>
+</div>
+<p class="text-xs text-slate-500 leading-relaxed line-clamp-2">
+              Statutory regulatory standards, GDPR compliance frameworks, and corporate policy manuals.
+            </p>
+</div>
+<div class="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-medium">
+              11 documents
+            </span>
+<span class="text-slate-400 text-[11px]">Updated 3d ago</span>
+</div>
+</div>
+</section>
+</main>
+</div>
+</body></html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DocIntel - Create New Box</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "error": "#ba1a1a",
+            "on-error": "#ffffff",
+            "error-container": "#ffdad6",
+            "secondary-fixed": "#e1e0ff",
+            "outline": "#777587",
+            "surface-container-highest": "#dae2fd",
+            "primary": "#3525cd",
+            "on-tertiary-fixed": "#001e2f",
+            "background": "#faf8ff",
+            "on-background": "#131b2e",
+            "on-secondary": "#ffffff",
+            "on-primary-fixed": "#0f0069",
+            "on-error-container": "#93000a",
+            "on-secondary-container": "#fffbff",
+            "surface": "#faf8ff",
+            "on-surface": "#131b2e",
+            "outline-variant": "#c7c4d8",
+            "on-tertiary-fixed-variant": "#004c6e",
+            "on-surface-variant": "#464555",
+            "on-tertiary-container": "#b8e0ff",
+            "primary-container": "#4f46e5",
+            "on-primary-container": "#dad7ff",
+            "primary-fixed": "#e2dfff",
+            "on-tertiary": "#ffffff",
+            "tertiary-container": "#006693",
+            "on-primary-fixed-variant": "#3323cc",
+            "surface-container-lowest": "#ffffff",
+            "tertiary-fixed-dim": "#89ceff",
+            "inverse-surface": "#283044",
+            "surface-bright": "#faf8ff",
+            "surface-dim": "#d2d9f4",
+            "inverse-on-surface": "#eef0ff",
+            "inverse-primary": "#c3c0ff",
+            "surface-container-low": "#f2f3ff",
+            "secondary-container": "#6063ee",
+            "tertiary-fixed": "#c9e6ff",
+            "secondary-fixed-dim": "#c0c1ff",
+            "on-primary": "#ffffff",
+            "on-secondary-fixed": "#07006c",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "tertiary": "#004d70",
+            "surface-tint": "#4d44e3",
+            "primary-fixed-dim": "#c3c0ff",
+            "surface-container-high": "#e2e7ff",
+            "surface-container": "#eaedff",
+            "surface-variant": "#dae2fd",
+            "secondary": "#4648d4"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "margin-mobile": "1rem",
+            "space-sm": "0.5rem",
+            "gutter-sm": "1rem",
+            "space-lg": "1.5rem",
+            "space-xs": "0.25rem",
+            "gutter": "1.5rem",
+            "space-md": "1rem",
+            "space-xl": "2.5rem",
+            "margin": "2rem"
+          },
+          "fontFamily": {
+            "headline-md": ["Hanken Grotesk"],
+            "headline-lg-mobile": ["Hanken Grotesk"],
+            "label-sm": ["JetBrains Mono"],
+            "headline-sm": ["Hanken Grotesk"],
+            "display": ["Hanken Grotesk"],
+            "headline-lg": ["Hanken Grotesk"],
+            "body-lg": ["Inter"],
+            "label-md": ["JetBrains Mono"],
+            "body-sm": ["Inter"],
+            "body-md": ["Inter"]
+          },
+          "fontSize": {
+            "headline-md": ["1.5rem", { lineHeight: "1.3", letterSpacing: "-0.02em", fontWeight: "600" }],
+            "headline-lg-mobile": ["1.75rem", { lineHeight: "1.25", letterSpacing: "-0.02em", fontWeight: "600" }],
+            "label-sm": ["0.6875rem", { lineHeight: "1.35", letterSpacing: "0.02em", fontWeight: "500" }],
+            "headline-sm": ["1.125rem", { lineHeight: "1.4", letterSpacing: "-0.015em", fontWeight: "600" }],
+            "display": ["3rem", { lineHeight: "1.15", letterSpacing: "-0.03em", fontWeight: "700" }],
+            "headline-lg": ["2.25rem", { lineHeight: "1.2", letterSpacing: "-0.025em", fontWeight: "600" }],
+            "body-lg": ["1rem", { lineHeight: "1.6", letterSpacing: "-0.01em", fontWeight: "400" }],
+            "label-md": ["0.8125rem", { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "500" }],
+            "body-sm": ["0.75rem", { lineHeight: "1.5", letterSpacing: "0.01em", fontWeight: "400" }],
+            "body-md": ["0.875rem", { lineHeight: "1.55", letterSpacing: "0em", fontWeight: "400" }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 20px;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased font-body-md relative h-screen w-screen overflow-hidden">
+<!-- ==================== BACKGROUND UNDERLAY: DocIntel Minimal Light Dashboard ==================== -->
+<div class="absolute inset-0 flex h-full w-full pointer-events-none select-none filter blur-[1px] opacity-90">
+<!-- SideNavBar (Shared Component Replica) -->
+<aside class="fixed left-0 top-0 h-full z-40 p-4 h-screen w-64 flex flex-col shrink-0 bg-surface-container-lowest border-r border-outline-variant">
+<!-- Brand Header -->
+<div class="flex items-center gap-3 px-3 py-2 mb-6">
+<div class="h-8 w-8 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-headline-sm font-semibold">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">description</span>
+</div>
+<div>
+<span class="font-headline-sm font-semibold tracking-tight text-on-surface block leading-tight">DocIntel</span>
+<span class="font-label-sm text-outline block">Precision AI</span>
+</div>
+</div>
+<!-- CTA 'New Box' -->
+<button class="w-full mb-6 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-primary-container text-white font-body-md font-medium text-sm shadow-sm">
+<span class="material-symbols-outlined text-sm">add</span>
+<span>New Box</span>
+</button>
+<!-- Navigation Tabs -->
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-container-high text-primary font-medium" href="#">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">folder</span>
+<span>My Boxes</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span>Knowledge Base</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<!-- Footer Tab -->
+<div class="pt-4 border-t border-outline-variant/30">
+<div class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant">
+<span class="material-symbols-outlined">account_circle</span>
+<span class="font-body-md text-sm font-medium">Profile</span>
+</div>
+</div>
+</aside>
+<!-- Main Workspace Canvas -->
+<div class="flex-1 ml-64 flex flex-col h-full bg-surface">
+<!-- TopNavBar (Shared Component Replica) -->
+<header class="flex justify-between items-center h-14 px-6 w-full bg-surface-container-lowest border-b border-outline-variant">
+<div class="flex items-center gap-3 w-80">
+<div class="flex items-center w-full px-3 py-1.5 bg-surface-container-low rounded-lg border border-outline-variant/40 text-on-surface-variant text-sm">
+<span class="material-symbols-outlined text-outline mr-2 text-lg">search</span>
+<span class="text-outline text-sm">Search documents, queries...</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant p-1.5 rounded-lg"><span class="material-symbols-outlined">notifications</span></button>
+<button class="text-on-surface-variant p-1.5 rounded-lg"><span class="material-symbols-outlined">help_outline</span></button>
+<div class="h-8 w-8 rounded-full bg-surface-container-high flex items-center justify-center font-label-md font-semibold text-primary">
+            JS
+          </div>
+</div>
+</header>
+<!-- Dashboard Mock Content -->
+<main class="p-8 flex-1 overflow-hidden space-y-6">
+<div class="flex items-center justify-between">
+<div>
+<h1 class="font-headline-md text-headline-md text-on-surface">Intelligence Overview</h1>
+<p class="font-body-md text-on-surface-variant text-sm mt-0.5">Real-time status across active corporate document silos.</p>
+</div>
+<div class="flex gap-2">
+<span class="font-label-sm px-2.5 py-1 bg-surface-container-high rounded text-primary font-medium">SOC2 TYPE II VERIFIED</span>
+</div>
+</div>
+<!-- Metric Grid -->
+<div class="grid grid-cols-4 gap-4">
+<div class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-5">
+<span class="font-label-sm text-outline">INDEXED VECTORS</span>
+<div class="font-headline-md text-headline-md mt-1">1.48M</div>
+<div class="font-body-sm text-outline mt-1 text-xs">Across 8 private enclaves</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-5">
+<span class="font-label-sm text-outline">EXTRACTION ACCURACY</span>
+<div class="font-headline-md text-headline-md mt-1">99.4%</div>
+<div class="font-body-sm text-outline mt-1 text-xs">High-confidence grounding</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-5">
+<span class="font-label-sm text-outline">ACTIVE BOXES</span>
+<div class="font-headline-md text-headline-md mt-1">12</div>
+<div class="font-body-sm text-outline mt-1 text-xs">3 team shared, 9 isolated</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-5">
+<span class="font-label-sm text-outline">RETENTION AUDIT</span>
+<div class="font-headline-md text-headline-md mt-1 text-primary">Compliant</div>
+<div class="font-body-sm text-outline mt-1 text-xs">Auto-purge configured</div>
+</div>
+</div>
+<!-- Recent Documents Table Area -->
+<div class="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-6">
+<div class="h-4 w-48 bg-surface-container-highest rounded mb-4"></div>
+<div class="space-y-3">
+<div class="h-10 bg-surface-container-low rounded-lg w-full"></div>
+<div class="h-10 bg-surface-container-low rounded-lg w-full"></div>
+<div class="h-10 bg-surface-container-low rounded-lg w-full"></div>
+</div>
+</div>
+</main>
+</div>
+</div>
+<!-- ==================== MODAL OVERLAY BACKDROP ==================== -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/30 backdrop-blur-[3px] transition-opacity">
+<!-- ==================== MODAL CARD DIALOG ==================== -->
+<div aria-labelledby="modal-title" aria-modal="true" class="w-full max-w-[560px] bg-surface-container-lowest rounded-2xl border border-outline-variant/70 shadow-2xl shadow-on-surface/10 overflow-hidden flex flex-col transition-all duration-200" role="dialog">
+<!-- Header -->
+<div class="px-6 pt-5 pb-4 border-b border-outline-variant/40 flex items-start justify-between">
+<div>
+<div class="flex items-center gap-2">
+<span class="h-2 w-2 rounded-full bg-primary-container inline-block"></span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface tracking-tight" id="modal-title">Create New Box</h2>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Set up a personal workspace for your documents and grounded AI analysis.</p>
+</div>
+<button aria-label="Close dialog" class="text-outline hover:text-on-surface rounded-lg p-1.5 hover:bg-surface-container-low transition-colors" onclick="console.log('Close clicked')" type="button">
+<span class="material-symbols-outlined text-xl">close</span>
+</button>
+</div>
+<!-- Modal Body / Form -->
+<div class="px-6 py-5 space-y-5 overflow-y-auto max-h-[calc(85vh-130px)]">
+<!-- Field 1: Box Name -->
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="font-body-md text-xs font-semibold text-on-surface tracking-tight flex items-center gap-1" for="box-name">
+              Box Name <span class="text-error font-medium">*</span>
+</label>
+<span class="font-label-sm text-[10px] text-outline">0 / 64</span>
+</div>
+<div class="relative">
+<input autofocus="" class="w-full bg-surface-container-lowest border border-outline-variant/80 rounded-lg px-3.5 py-2.5 text-sm text-on-surface placeholder:text-outline/70 focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 transition-all font-body-md" id="box-name" name="boxName" placeholder="e.g., Q4 Acquisition Due Diligence" type="text"/>
+</div>
+<p class="font-body-sm text-[11px] text-on-surface-variant">
+            A clear, descriptive name for your workspace.
+          </p>
+</div>
+<!-- Field 2: Description -->
+<div class="space-y-1.5">
+<label class="font-body-md text-xs font-semibold text-on-surface tracking-tight" for="box-desc">
+            Description <span class="text-outline font-normal">(Optional)</span>
+</label>
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant/80 rounded-lg px-3.5 py-2 text-sm text-on-surface placeholder:text-outline/70 focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 transition-all font-body-md resize-none" id="box-desc" name="boxDescription" placeholder="Briefly describe the purpose of this collection or types of documents to be uploaded..." rows="3"></textarea>
+</div>
+<!-- Field 3: Privacy & Isolation Level (Selectable Radio Cards) -->
+<div class="space-y-2">
+<div><label class="font-body-md text-xs font-semibold text-on-surface tracking-tight block">Workspace Privacy &amp; Storage</label><span class="font-body-sm text-[11px] text-on-surface-variant">Manage privacy and retention settings for your personal workspace.</span></div>
+<div class="space-y-2" id="privacy-radio-group"><label class="privacy-option flex items-start gap-3 p-3 rounded-lg border border-primary-container bg-surface-container-low/60 hover:bg-surface-container cursor-pointer transition-all"><input checked="" class="mt-0.5 text-primary-container focus:ring-primary-container/30 border-outline-variant" name="privacyLevel" type="radio" value="private"/><div class="h-7 w-7 rounded bg-primary-fixed flex items-center justify-center shrink-0 text-primary mt-0.5"><span class="material-symbols-outlined text-base">lock</span></div><div class="flex-1 min-w-0"><div class="flex items-center gap-1.5"><span class="font-body-md text-xs font-semibold text-on-surface">Private Workspace</span><span class="font-label-sm text-[9px] px-1.5 py-0.5 bg-primary-container text-white rounded">DEFAULT</span></div><p class="font-body-sm text-[11px] text-on-surface-variant mt-0.5 leading-normal">Only accessible by you. Documents and chat history remain strictly private.</p></div></label><label class="privacy-option flex items-start gap-3 p-3 rounded-lg border border-outline-variant/60 bg-surface-container-lowest hover:bg-surface-container-low cursor-pointer transition-all"><input class="mt-0.5 text-primary-container focus:ring-primary-container/30 border-outline-variant" name="privacyLevel" type="radio" value="shared_link"/><div class="h-7 w-7 rounded bg-surface-container-high flex items-center justify-center shrink-0 text-on-surface-variant mt-0.5"><span class="material-symbols-outlined text-base">link</span></div><div class="flex-1 min-w-0"><span class="font-body-md text-xs font-semibold text-on-surface">Shared via Link</span><p class="font-body-sm text-[11px] text-on-surface-variant mt-0.5 leading-normal">Allow view or query access to collaborators with a password-protected link.</p></div></label></div>
+</div>
+<!-- Info / Tip Notice -->
+<div class="flex items-start gap-2.5 p-3 rounded-lg bg-surface-container border border-outline-variant/40">
+<span class="material-symbols-outlined text-primary text-base shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">shield_with_heart</span>
+<p class="font-body-sm text-[11px] text-on-surface leading-relaxed"><strong class="font-semibold text-primary">Local isolation active:</strong> Your uploaded documents are processed into secure vector embeddings and never used to train public AI models.</p>
+</div>
+</div>
+<!-- Modal Footer Actions -->
+<div class="px-6 py-4 border-t border-outline-variant/40 bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-1.5 text-outline text-[11px] font-label-sm">
+<span class="material-symbols-outlined text-xs text-outline">check_circle</span>
+<span>Draft auto-saved</span>
+</div>
+<div class="flex items-center gap-2.5">
+<button class="px-4 py-2 rounded-lg font-body-md text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors" onclick="console.log('Cancelled')" type="button">
+            Cancel
+          </button>
+<button class="px-5 py-2 rounded-lg bg-primary-container hover:bg-primary text-white font-body-md text-xs font-medium shadow-sm transition-all flex items-center gap-1.5" onclick="console.log('Create Box submitted')" type="button">
+<span class="material-symbols-outlined text-sm">add</span>
+<span>Create Box</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Interactive script to highlight selected radio cards -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const radioGroup = document.querySelectorAll('input[name="privacyLevel"]');
+      radioGroup.forEach(radio => {
+        radio.addEventListener('change', () => {
+          document.querySelectorAll('.privacy-option').forEach(card => {
+            card.classList.remove('border-primary-container', 'bg-surface-container-low/60');
+            card.classList.add('border-outline-variant/60', 'bg-surface-container-lowest');
+          });
+          const parentLabel = radio.closest('label');
+          if (radio.checked && parentLabel) {
+            parentLabel.classList.remove('border-outline-variant/60', 'bg-surface-container-lowest');
+            parentLabel.classList.add('border-primary-container', 'bg-surface-container-low/60');
+          }
+        });
+      });
+    });
+  </script>
+</body></html>
