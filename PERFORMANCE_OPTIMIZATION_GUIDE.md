@@ -296,7 +296,7 @@ class ChatService:
 
 External APIs (free):
 - Groq (LLM) ← Free tier, 100 requests/min
-- Google Drive API ← Free tier, 100 requests/day
+
 ```
 
 ---

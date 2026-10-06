@@ -163,11 +163,13 @@ RETURNS TABLE (
     content text,
     embedding_score float,
     lexical_score float,
+    rrf_score float,
     chunk_index int,
     page_start int,
     page_end int,
     section_title text,
-    metadata jsonb
+    metadata jsonb,
+    filename text
 )
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -214,16 +216,19 @@ BEGIN
         dc.content,
         s.semantic_score AS embedding_score,
         l.lexical_score AS lexical_score,
+        (cs.rrf_semantic_score + cs.rrf_lexical_score) AS rrf_score,
         dc.chunk_index,
         dc.page_start,
         dc.page_end,
         dc.section_title,
-        dc.metadata
+        dc.metadata,
+        d.filename
     FROM combined_search cs
     JOIN public.document_chunks dc ON dc.id = cs.id
+    JOIN public.documents d ON d.id = dc.document_id
     LEFT JOIN semantic_search s ON s.id = dc.id
     LEFT JOIN lexical_search l ON l.id = dc.id
-    ORDER BY (cs.rrf_semantic_score + cs.rrf_lexical_score) DESC
+    ORDER BY rrf_score DESC
     LIMIT match_count;
 END;
 $$;
