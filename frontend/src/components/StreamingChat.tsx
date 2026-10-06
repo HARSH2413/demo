@@ -9,9 +9,18 @@ import { useState, useRef, useEffect } from 'react';
 import { API_URL } from '@/lib/config';
 
 interface Citation {
+  evidence_id?: string;
+  document_id?: string;
   filename: string;
+  chunk_index?: number;
+  page_start?: number;
+  page_end?: number;
+  section_title?: string;
   content: string;
-  rerank_score: number;
+  embedding_score?: number;
+  lexical_score?: number;
+  rrf_score?: number;
+  rerank_score?: number;
 }
 
 interface StreamingChatProps {

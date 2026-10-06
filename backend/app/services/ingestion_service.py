@@ -272,9 +272,9 @@ class IngestionService:
         else:
             logger.info(f"Successfully ingested '{filename}' ({total_batches} batches)")
 
-    def delete_file(self, filename: str, box_id: str) -> bool:
-        """Deletes all chunks of a document."""
-        return self.db.delete_document(filename=filename, box_id=box_id)
+    def delete_document(self, document_id: str, box_id: str) -> bool:
+        """Deletes a document and cascades to chunks."""
+        return self.db.delete_document(document_id=document_id, box_id=box_id)
 
     def list_files(self, box_id: str) -> List[str]:
         """Lists all unique filenames for a Box."""
@@ -300,7 +300,7 @@ class IngestionService:
         elif filename_lower.endswith(".csv"):
             return self._extract_csv(file_path)
 
-        elif filename_lower.endswith((".xlsx", ".xls")):
+        elif filename_lower.endswith(".xlsx"):
             return self._extract_xlsx(file_path)
 
         else:
@@ -333,7 +333,7 @@ class IngestionService:
 
     def _extract_xlsx(self, file_path: str) -> str:
         """
-        Extracts text from Excel files (XLSX/XLS).
+        Extracts text from Excel files (XLSX).
 
         Reads all sheets, converting each row to "Col: val | Col: val" format.
         """
@@ -380,7 +380,6 @@ class IngestionService:
         type_map = {
             ".pdf": "PDF", ".docx": "Word Document", ".txt": "Text File",
             ".csv": "CSV Spreadsheet", ".xlsx": "Excel Spreadsheet",
-            ".xls": "Excel Spreadsheet",
         }
         return type_map.get(ext, "Document")
 

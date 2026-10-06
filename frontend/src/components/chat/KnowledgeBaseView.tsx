@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 export interface DocumentRecord {
+  id: string;
   filename: string;
   file_hash?: string;
   created_at?: string;
@@ -257,7 +258,7 @@ export function KnowledgeBaseView({
                             </button>
                           )}
                           <button
-                            onClick={() => { if (confirm(`Delete "${doc.filename}"?`)) onDeleteFile(doc.filename); }}
+                            onClick={() => { if (confirm(`Delete "${doc.filename}"?`)) onDeleteFile(doc.id); }}
                             className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                             title="Delete"
                           >

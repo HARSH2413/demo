@@ -142,8 +142,8 @@ class RetrievalEngine:
                 for doc in docs:
                     content_key = doc.get("content", "")[:100]
                     existing = all_docs.get(content_key)
-                    score = doc.get("rrf_score") or doc.get("similarity") or doc.get("embedding_score") or 0.0
-                    existing_score = existing.get("rrf_score") or existing.get("similarity") or existing.get("embedding_score") or 0.0 if existing else -1.0
+                    score = doc.get("rrf_score") or doc.get("embedding_score") or 0.0
+                    existing_score = existing.get("rrf_score") or existing.get("embedding_score") or 0.0 if existing else -1.0
                     if not existing or score > existing_score:
                         all_docs[content_key] = doc
             except Exception as e:

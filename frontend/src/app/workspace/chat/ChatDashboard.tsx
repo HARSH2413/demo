@@ -15,9 +15,18 @@ import UploadProgressModal, { UploadFileItem } from '@/components/chat/UploadPro
 // ── Types ──
 
 interface Citation {
+  evidence_id?: string;
+  document_id?: string;
   filename: string;
+  chunk_index?: number;
+  page_start?: number;
+  page_end?: number;
+  section_title?: string;
   content: string;
-  similarity: number;
+  embedding_score?: number;
+  lexical_score?: number;
+  rrf_score?: number;
+  rerank_score?: number;
 }
 
 interface ChatMessage {
@@ -107,7 +116,9 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   const fetchDocuments = useCallback(async () => {
     try {
       const data = await apiFetch(`/api/v1/documents/?box_id=${boxId}`);
-      if (data.documents) {
+      if (data.data) {
+        setDocuments(data.data);
+      } else if (data.documents) {
         setDocuments(data.documents);
       } else if (data.files) {
         setDocuments(data.files.map((filename: string) => ({ filename, status: 'completed' as const })));
@@ -294,11 +305,11 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
     }
   };
 
-  const handleDeleteFile = async (filename: string) => {
+  const handleDeleteFile = async (documentId: string) => {
     try {
-      await apiFetch(`/api/v1/documents/?filename=${encodeURIComponent(filename)}&box_id=${boxId}`, { method: "DELETE" });
-      setDocuments(prev => prev.filter(document => document.filename !== filename));
-      showToast(`Deleted "${filename}"`, "success");
+      await apiFetch(`/api/v1/documents/${documentId}?box_id=${boxId}`, { method: "DELETE" });
+      setDocuments(prev => prev.filter(document => document.id !== documentId));
+      showToast(`Deleted document`, "success");
     } catch { }
   };
 

@@ -32,9 +32,17 @@ class RenameSessionRequest(BaseModel):
 
 
 class Citation(BaseModel):
+    evidence_id: Optional[str] = None
+    document_id: Optional[str] = None
     filename: str
+    chunk_index: Optional[int] = None
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    section_title: Optional[str] = None
     content: str
-    similarity: float = 0.0
+    embedding_score: Optional[float] = None
+    lexical_score: Optional[float] = None
+    rrf_score: Optional[float] = None
     rerank_score: Optional[float] = None
 
 

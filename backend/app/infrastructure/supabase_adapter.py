@@ -54,16 +54,6 @@ class SupabaseAdapter(IVectorStore):
 
     # ── Document Operations ──
 
-    # ── Legacy Workspace Document Operations ──
-    @retry(
-        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
-        wait=wait_random_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception(is_transient_error),
-        before_sleep=lambda rs: logger.warning(f"Supabase save_documents retry (attempt {rs.attempt_number})"),
-    )
-    def save_documents(self, records: List[Dict[str, Any]]) -> int:
-        response = self.client.table("documents").insert(records).execute()
-        return len(response.data)
 
     # ── Box Document Operations (Phase 1B) ──
     @retry(
@@ -147,12 +137,12 @@ class SupabaseAdapter(IVectorStore):
         retry=retry_if_exception(is_transient_error),
         before_sleep=lambda rs: logger.warning(f"Supabase delete_document retry (attempt {rs.attempt_number})"),
     )
-    def delete_document(self, filename: str, box_id: str) -> bool:
+    def delete_document(self, document_id: str, box_id: str) -> bool:
         response = (
             self.client.table("documents")
             .delete()
             .eq("box_id", box_id)
-            .eq("filename", filename)
+            .eq("id", document_id)
             .execute()
         )
         return len(response.data) > 0
@@ -387,8 +377,14 @@ class SupabaseAdapter(IVectorStore):
         before_sleep=lambda rs: logger.warning(f"Supabase list_boxes retry (attempt {rs.attempt_number})"),
     )
     def list_boxes(self, user_id: str) -> list[dict]:
-        response = self.client.table("boxes").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
-        return response.data  # type: ignore
+        # Uses Supabase relations to get a count of all documents (including processing/failed)
+        response = self.client.table("boxes").select("*, documents(count)").eq("user_id", user_id).order("created_at", desc=True).execute()
+        boxes = []
+        for box in response.data:
+            doc_info = box.pop("documents", [])
+            box["document_count"] = doc_info[0]["count"] if doc_info and "count" in doc_info[0] else 0
+            boxes.append(box)
+        return boxes
 
     @retry(
         stop=stop_after_attempt(settings.DB_MAX_RETRIES),
@@ -397,8 +393,14 @@ class SupabaseAdapter(IVectorStore):
         before_sleep=lambda rs: logger.warning(f"Supabase get_box retry (attempt {rs.attempt_number})"),
     )
     def get_box(self, box_id: str, user_id: str) -> Optional[dict]:
-        response = self.client.table("boxes").select("*").eq("id", box_id).eq("user_id", user_id).execute()
-        return response.data[0] if response.data else None  # type: ignore
+        # Uses Supabase relations to get a count of all documents (including processing/failed)
+        response = self.client.table("boxes").select("*, documents(count)").eq("id", box_id).eq("user_id", user_id).execute()
+        if not response.data:
+            return None
+        box = response.data[0]
+        doc_info = box.pop("documents", [])
+        box["document_count"] = doc_info[0]["count"] if doc_info and "count" in doc_info[0] else 0
+        return box
 
     @retry(
         stop=stop_after_attempt(settings.DB_MAX_RETRIES),

@@ -247,7 +247,9 @@ class ChatService:
                         "page_end": doc.get("page_end"),
                         "section_title": doc.get("section_title"),
                         "content": doc.get("content", ""),
-                        "similarity": doc.get("similarity", 0.0),
+                        "embedding_score": doc.get("embedding_score", None),
+                        "lexical_score": doc.get("lexical_score", None),
+                        "rrf_score": doc.get("rrf_score", None),
                         "rerank_score": doc.get("rerank_score", None),
                     })
 
