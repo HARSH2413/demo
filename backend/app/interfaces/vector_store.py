@@ -40,7 +40,7 @@ class IVectorStore(ABC):
         pass
 
     @abstractmethod
-    def delete_document(self, filename: str, box_id: str) -> bool:
+    def delete_document(self, document_id: str, box_id: str) -> bool:
         """Deletes a document and its chunks via cascading delete."""
         pass
         
