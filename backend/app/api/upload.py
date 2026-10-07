@@ -20,7 +20,7 @@ from app.core.logger import logger
 
 router = APIRouter(prefix="/api/v1/upload", tags=["Document Management"])
 
-TEMP_DIR = os.path.join(tempfile.gettempdir(), "actionrag_uploads")
+TEMP_DIR = os.path.join(tempfile.gettempdir(), "docintel_uploads")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # 64KB chunks for stream hashing

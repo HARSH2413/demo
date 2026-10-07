@@ -21,7 +21,7 @@ logger.add(
 
 # Optional: file logging for production debugging
 logger.add(
-    os.path.join(tempfile.gettempdir(), "actionrag.log"),
+    os.path.join(tempfile.gettempdir(), "docintel.log"),
     rotation="10 MB",
     retention="3 days",
     level="DEBUG",

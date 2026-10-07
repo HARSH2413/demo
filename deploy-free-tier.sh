@@ -5,7 +5,7 @@
 set -e
 
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║    ActionRAG Free Tier Deployment Script                   ║"
+echo "║    DocIntel Free Tier Deployment Script                    ║"
 echo "║    Deploy to Vercel (frontend) + Railway (backend)         ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""

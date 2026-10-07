@@ -1,5 +1,5 @@
 """
-ActionRAG SME Backend — Enterprise Knowledge Agent API.
+DocIntel SME Backend — Enterprise Knowledge Agent API.
 
 Config-driven, resilient, and future-proof.
 Swap models and services by editing .env, not code.
@@ -27,7 +27,7 @@ from app.api.boxes import router as boxes_router
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle — validates config on boot."""
     logger.info("=" * 50)
-    logger.info("ActionRAG Backend starting up")
+    logger.info("DocIntel Backend starting up")
     logger.info(f"  LLM Model:       {settings.LLM_MODEL_NAME}")
     logger.info(f"  Embedding Model:  {settings.EMBEDDING_MODEL_NAME}")
     logger.info(f"  Reranker Model:   {settings.RERANKER_MODEL_NAME}")
@@ -49,12 +49,12 @@ async def lifespan(app: FastAPI):
     logger.info("Reranker model ready.")
 
     yield
-    logger.info("ActionRAG Backend shutting down")
+    logger.info("DocIntel Backend shutting down")
 
 
 # Initialize the App
 app = FastAPI(
-    title="ActionRAG SME Backend",
+    title="DocIntel SME Backend",
     description="The Anti-Hallucination Knowledge Agent API",
     version="1.1.0",
     lifespan=lifespan,
@@ -124,5 +124,5 @@ async def health_check():
         "status": "online",
         "version": "1.1.0",
         "model": settings.LLM_MODEL_NAME,
-        "message": "ActionRAG Backend is running. Visit /docs for the Swagger API.",
+        "message": "DocIntel Backend is running. Visit /docs for the Swagger API.",
     }

@@ -236,7 +236,7 @@ class ChatService:
         }
 
     def _build_system_prompt(self, context_text: str, fallback_phrase: str) -> str:
-        return f"""You are ActionRAG, an expert Enterprise Knowledge Agent.
+        return f"""You are DocIntel, an expert Enterprise Knowledge Agent.
 
 INSTRUCTIONS:
 1. FACTUAL ACCURACY: Answer the user's question using ONLY the facts provided in the CONTEXT below. Never invent, assume, or hallucinate information not present in the sources.
