@@ -20,6 +20,10 @@ def delete_document(
         success = ingestion_service.delete_document(document_id=document_id, box_id=box_id)
         if not success:
             raise HTTPException(status_code=404, detail="Document not found.")
+            
+        from app.core.cache import global_query_cache
+        global_query_cache.invalidate_box(box_id)
+        
         return {"status": "success", "message": f"Successfully deleted document."}
     except HTTPException:
         raise

@@ -170,6 +170,8 @@ def _process_upload_safely(
             box_id=box_id,
             document_id=document_id,
         )
+        from app.core.cache import global_query_cache
+        global_query_cache.invalidate_box(box_id)
     except Exception as e:
         # This is deliberately a final boundary around the background task.
         # The service already logs detailed extraction/batch failures.

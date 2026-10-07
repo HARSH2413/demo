@@ -4,6 +4,7 @@ from app.interfaces.embedder import IEmbedder
 from app.interfaces.llm import ILLM
 from app.interfaces.reranker import IReranker
 from app.core.logger import logger
+from app.core.cache import global_query_cache
 
 class RetrievalEngine:
     def __init__(
@@ -14,8 +15,8 @@ class RetrievalEngine:
         reranker: IReranker,
         retrieval_top_k: int = 40,
         reranker_top_k: int = 8,
-        enable_hyde: bool = True,
-        enable_multi_query: bool = True,
+        enable_hyde: bool = False,
+        enable_multi_query: bool = False,
     ):
         self.db = db
         self.embedder = embedder
@@ -25,6 +26,7 @@ class RetrievalEngine:
         self.reranker_top_k = reranker_top_k
         self.enable_hyde = enable_hyde
         self.enable_multi_query = enable_multi_query
+        self.cache = global_query_cache
 
     def retrieve_documents(
         self,
@@ -35,6 +37,13 @@ class RetrievalEngine:
         retrieval_limit: Optional[int] = None,
     ) -> list[dict]:
         """Runs full retrieval stack and returns retrieved documents."""
+        # Fast path: use cache for normal queries
+        if not force_hyde and not force_multi_query:
+            cached = self.cache.get_query_result(search_query, box_id)
+            if cached is not None:
+                logger.info("Cache hit for query results")
+                return cached
+
         search_queries = self._build_search_queries(
             search_query=search_query,
             use_hyde=force_hyde,
@@ -59,6 +68,9 @@ class RetrievalEngine:
             except Exception as e:
                 logger.warning(f"Re-ranking failed, using original order: {e}")
                 retrieved_docs = retrieved_docs[:self.reranker_top_k]
+
+        if not force_hyde and not force_multi_query:
+            self.cache.set_query_result(search_query, box_id, retrieved_docs)
 
         return retrieved_docs
 

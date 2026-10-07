@@ -88,6 +88,12 @@ class QueryResultCache(SimpleCache):
         """Cache search results."""
         key = f"{box_id}:{query}"
         super().set(key, results)
+        
+    def invalidate_box(self, box_id: str) -> None:
+        """Invalidate all cached queries for a specific box."""
+        keys_to_delete = [k for k in self.cache.keys() if k.startswith(f"{box_id}:")]
+        for k in keys_to_delete:
+            del self.cache[k]
 
 
 class EmbeddingCache(SimpleCache):
@@ -179,3 +185,7 @@ def create_cache(cache_type: str = "simple", redis_url: str = None) -> SimpleCac
     else:
         logger.info("Using in-memory cache")
         return SimpleCache()
+
+# Global cache instances
+global_embedding_cache = EmbeddingCache(max_size=10000, ttl=86400)
+global_query_cache = QueryResultCache(max_size=5000, ttl=3600)

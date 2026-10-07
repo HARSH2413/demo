@@ -154,6 +154,7 @@ async def seed_test_box(box_id: str, db, embedder):
                 "box_id": box_id,
                 "filename": f"mock-{c['doc']}.txt",
                 "file_hash": f"hash-{c['doc']}",
+                "mime_type": "text/plain",
                 "status": "completed"
             })
             inserted_docs.add(c["doc"])
@@ -284,8 +285,8 @@ async def run_benchmark(box_id: str):
     print("Cleanup complete.")
 
 if __name__ == "__main__":
-    # Use an existing Box ID from the DB so foreign keys pass
-    TEST_BOX_ID = "081532e9-a2e9-4263-a670-d41c496afcdf"
+    # Use the active Box ID from user logs
+    TEST_BOX_ID = "a3727301-fd4b-418c-8b5f-4bf847b6cc43"
     
     # Run the async benchmark
     asyncio.run(run_benchmark(TEST_BOX_ID))
