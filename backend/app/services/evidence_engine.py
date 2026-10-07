@@ -107,12 +107,7 @@ class EvidenceEngine:
                         neighbor_texts.append(n_content)
 
                 if neighbor_texts:
-                    expanded_content = (
-                        doc["content"] + "\n\n"
-                        "[SURROUNDING CONTEXT FROM SAME DOCUMENT]\n" +
-                        "\n---\n".join(neighbor_texts[:2])
-                    )
-                    enriched_doc = {**doc, "content": expanded_content, "has_neighbor_context": True}
+                    enriched_doc = {**doc, "has_neighbor_context": True, "neighbor_context": "\n---\n".join(neighbor_texts[:2])}
                     expanded.append(enriched_doc)
                     logger.debug(f"Expanded '{filename}' with {len(neighbor_texts[:2])} neighbor chunks")
                     continue
@@ -177,11 +172,15 @@ class EvidenceEngine:
             meta = doc.get("metadata") or {}
             context_header = meta.get("context_header", f"[Document: {doc.get('filename')}]")
             
+            neighbor_context_text = ""
+            if doc.get("has_neighbor_context") and doc.get("neighbor_context"):
+                neighbor_context_text = f"\n[SURROUNDING CONTEXT FROM SAME DOCUMENT]\n{doc['neighbor_context']}\n"
+            
             context_parts.append(
                 f"--- EVIDENCE {evidence_id} ---\n"
                 f"Source: {doc.get('filename')}{score_label}{neighbor_label}\n"
                 f"Context: {context_header}\n"
-                f"Content: {doc.get('content')}\n"
+                f"Content: {doc.get('content')}{neighbor_context_text}\n"
                 f"----------------------"
             )
         return "\n\n".join(context_parts)

@@ -21,7 +21,74 @@ BENCHMARK_DATA = [
         "query": "Are NDAs required for contractors?",
         "expected": [("doc-3", 2)]
     },
-    # Add more factual, numeric, legal, financial, and table queries here.
+    {
+        "query": "Who is the CEO of the organization?",
+        "expected": [("doc-1", 1)]
+    },
+    {
+        "query": "What are the core hours for working?",
+        "expected": [("doc-4", 8)]
+    },
+    {
+        "query": "What is the refund policy for canceled flights?",
+        "expected": [("doc-5", 3)]
+    },
+    {
+        "query": "Does the health insurance cover dental?",
+        "expected": [("doc-6", 14)]
+    },
+    {
+        "query": "What is the maximum allowed PTO?",
+        "expected": [("doc-1", 10)]
+    },
+    {
+        "query": "How many days notice is required for resignation?",
+        "expected": [("doc-7", 4)]
+    },
+    {
+        "query": "What was the total expenditure in 2024?",
+        "expected": [("doc-2", 15)]
+    },
+    {
+        "query": "What are the rules for remote work?",
+        "expected": [("doc-8", 2)]
+    },
+    {
+        "query": "Is there a budget for home office equipment?",
+        "expected": [("doc-8", 5)]
+    },
+    {
+        "query": "What is the SLA for sev-1 incidents?",
+        "expected": [("doc-9", 1)]
+    },
+    {
+        "query": "Who is the primary contact for HR issues?",
+        "expected": [("doc-10", 0)]
+    },
+    {
+        "query": "What is the performance review schedule?",
+        "expected": [("doc-11", 6)]
+    },
+    {
+        "query": "Are bonuses guaranteed?",
+        "expected": [("doc-12", 9)]
+    },
+    {
+        "query": "What is the penalty for early termination of the contract?",
+        "expected": [("doc-13", 20)]
+    },
+    {
+        "query": "Is travel time compensated?",
+        "expected": [("doc-14", 7)]
+    },
+    {
+        "query": "Can I expense client dinners?",
+        "expected": [("doc-15", 3)]
+    },
+    {
+        "query": "What is the procedure for filing a grievance?",
+        "expected": [("doc-16", 11)]
+    }
 ]
 
 def calculate_mrr(retrieved_docs: List[Dict], expected: List[tuple]) -> float:
@@ -64,10 +131,37 @@ async def run_benchmark(box_id: str):
     total_recall_10 = 0.0
     
     total_retrieval_time = 0.0
+    total_db_search_time = 0.0
+    total_reranker_time = 0.0
+    
+    # Patch the engine to record latencies
+    original_multi_query_search = retrieval_engine._multi_query_search
+    original_rerank = retrieval_engine.reranker.rerank if retrieval_engine.reranker else None
+    
+    def patched_multi_query_search(*args, **kwargs):
+        t0 = time.time()
+        res = original_multi_query_search(*args, **kwargs)
+        nonlocal db_search_latency
+        db_search_latency = time.time() - t0
+        return res
+        
+    def patched_rerank(*args, **kwargs):
+        t0 = time.time()
+        res = original_rerank(*args, **kwargs)
+        nonlocal reranker_latency
+        reranker_latency = time.time() - t0
+        return res
+        
+    retrieval_engine._multi_query_search = patched_multi_query_search
+    if retrieval_engine.reranker:
+        retrieval_engine.reranker.rerank = patched_rerank
     
     for item in BENCHMARK_DATA:
         query = item["query"]
         expected = item["expected"]
+        
+        db_search_latency = 0.0
+        reranker_latency = 0.0
         
         start_time = time.time()
         
@@ -76,6 +170,8 @@ async def run_benchmark(box_id: str):
         
         latency = time.time() - start_time
         total_retrieval_time += latency
+        total_db_search_time += db_search_latency
+        total_reranker_time += reranker_latency
         
         # Calculate metrics
         mrr = calculate_mrr(results, expected)
@@ -87,7 +183,7 @@ async def run_benchmark(box_id: str):
         total_recall_10 += r10
         
         print(f"Query: '{query}'")
-        print(f"  Latency: {latency:.3f}s")
+        print(f"  Total Latency: {latency:.3f}s | DB Search: {db_search_latency:.3f}s | Reranker: {reranker_latency:.3f}s")
         print(f"  MRR: {mrr:.3f}, Recall@5: {r5:.1f}, Recall@10: {r10:.1f}")
         print("-" * 40)
 
@@ -95,7 +191,9 @@ async def run_benchmark(box_id: str):
     if n > 0:
         print("\n=== BENCHMARK RESULTS ===")
         print(f"Total Queries: {n}")
-        print(f"Average Latency: {total_retrieval_time / n:.3f}s")
+        print(f"Average Total Latency: {total_retrieval_time / n:.3f}s")
+        print(f"Average DB Search Latency: {total_db_search_time / n:.3f}s")
+        print(f"Average Reranker Latency: {total_reranker_time / n:.3f}s")
         print(f"Mean Reciprocal Rank (MRR): {total_mrr / n:.3f}")
         print(f"Recall@5: {total_recall_5 / n:.3f}")
         print(f"Recall@10: {total_recall_10 / n:.3f}")
