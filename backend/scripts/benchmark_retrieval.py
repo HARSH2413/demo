@@ -1,7 +1,7 @@
 import asyncio
 import time
 from typing import List, Dict, Any
-from app.core.dependencies import _get_db_adapter, _get_embedder_adapter, _get_llm_adapter, _get_reranker_adapter
+from app.core.dependencies import _get_db_adapter, _get_embedder_adapter, _get_llm_adapter, _get_reranker_adapter, _get_lexical_adapter
 from app.services.retrieval_engine import RetrievalEngine
 from app.core.logger import logger
 
@@ -178,6 +178,7 @@ async def run_benchmark(box_id: str):
     embedder = _get_embedder_adapter()
     llm = _get_llm_adapter()
     reranker = _get_reranker_adapter()
+    lexical_store = _get_lexical_adapter()
     
     # 1. Seed live data
     mock_chunks, DOCS = await seed_test_box(box_id, db, embedder)
@@ -194,13 +195,11 @@ async def run_benchmark(box_id: str):
 
     retrieval_engine = RetrievalEngine(
         db=db,
+        lexical_store=lexical_store,
         embedder=embedder,
-        llm=llm,
         reranker=reranker,
         retrieval_top_k=20,
-        reranker_top_k=10,
-        enable_hyde=False,
-        enable_multi_query=False
+        reranker_top_k=10
     )
 
     print(f"\nRunning benchmark on {len(local_benchmark_data)} queries...\n")
@@ -214,7 +213,7 @@ async def run_benchmark(box_id: str):
     total_reranker_time = 0.0
     
     # Patch the engine to record latencies
-    original_multi_query_search = retrieval_engine._multi_query_search
+    original_multi_query_search = retrieval_engine._hybrid_search
     original_rerank = retrieval_engine.reranker.rerank if retrieval_engine.reranker else None
     
     def patched_multi_query_search(*args, **kwargs):
@@ -231,7 +230,7 @@ async def run_benchmark(box_id: str):
         reranker_latency = time.time() - t0
         return res
         
-    retrieval_engine._multi_query_search = patched_multi_query_search
+    retrieval_engine._hybrid_search = patched_multi_query_search
     if retrieval_engine.reranker:
         retrieval_engine.reranker.rerank = patched_rerank
     
