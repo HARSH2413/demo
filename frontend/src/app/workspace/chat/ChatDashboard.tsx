@@ -36,6 +36,7 @@ interface ChatMessage {
   citations?: Citation[];
   key_takeaways?: string[];
   related_questions?: string[];
+  closest_matches?: Citation[];
   error?: boolean;
 }
 
@@ -359,7 +360,7 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
       });
       setMessages(prev => {
         const filtered = retryContent ? prev.filter(m => !(m.error && m.role === 'ai')) : prev;
-        return [...filtered, { role: 'ai', content: data.answer, citations: data.citations }];
+        return [...filtered, { role: 'ai', content: data.answer, citations: data.citations, closest_matches: data.closest_matches }];
       });
     } catch {
       setMessages(prev => [...prev, { role: 'ai', content: "I couldn't reach the server. Click retry or try again in a moment.", error: true }]);
@@ -612,6 +613,30 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
                                       openCitation(filtered, 0);
                                     }}
                                     className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-indigo-600 transition-colors bg-white px-2 py-1 rounded-md border border-slate-200 shadow-xs min-w-0">
+                                    <Link2 size={12} className="text-slate-400 shrink-0" />
+                                    <span className="truncate">{citationLabel(c)}</span>
+                                  </button>
+                                </div>
+                                <p className="text-sm text-slate-600 leading-relaxed mt-2 line-clamp-2">{c.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Closest Matches (Fallback) */}
+                        {msg.role === 'ai' && !msg.error && msg.closest_matches && msg.closest_matches.length > 0 && (
+                          <div className="space-y-2 pt-1 mt-4 border-t border-slate-100">
+                            <p className="text-xs font-semibold text-amber-600 mb-2 flex items-center gap-1">
+                              <AlertCircle size={14} /> Here are the closest matches found (relevance is low):
+                            </p>
+                            {msg.closest_matches.map((c, cIdx) => (
+                              <div key={`fallback-${cIdx}`} className="p-3 rounded-xl bg-amber-50/50 border border-amber-200/90 hover:border-amber-300 transition-colors">
+                                <div className="flex items-center justify-between gap-2">
+                                  <button onClick={() => {
+                                      const filtered = [c];
+                                      openCitation(filtered, 0);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-amber-700 transition-colors bg-white px-2 py-1 rounded-md border border-slate-200 shadow-xs min-w-0">
                                     <Link2 size={12} className="text-slate-400 shrink-0" />
                                     <span className="truncate">{citationLabel(c)}</span>
                                   </button>

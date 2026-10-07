@@ -28,6 +28,7 @@ import os
 from typing import List, Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.interfaces.vector_store import IVectorStore
+from app.interfaces.lexical_store import ILexicalStore
 from app.interfaces.embedder import IEmbedder
 from app.interfaces.llm import ILLM
 from app.core.logger import logger
@@ -40,6 +41,7 @@ class IngestionService:
     def __init__(
         self,
         db: IVectorStore,
+        lexical_store: ILexicalStore,
         embedder: IEmbedder,
         chunk_size: int = 1000,
         chunk_overlap: int = 300,
@@ -47,6 +49,7 @@ class IngestionService:
         llm: Optional[ILLM] = None,
     ):
         self.db = db
+        self.lexical_store = lexical_store
         self.embedder = embedder
         self.batch_size = batch_size
         self.llm = llm  # Optional: used for document summary generation
@@ -86,6 +89,7 @@ class IngestionService:
 
             # Successfully completed ingestion
             self.db.update_document_status(document_id, "completed")
+            self.lexical_store.invalidate_box(box_id)
 
         except Exception as e:
             logger.error(f"Ingestion failed for '{filename}': {e}")
@@ -323,7 +327,10 @@ class IngestionService:
 
     def delete_document(self, document_id: str, box_id: str) -> bool:
         """Deletes a document and cascades to chunks."""
-        return self.db.delete_document(document_id=document_id, box_id=box_id)
+        success = self.db.delete_document(document_id=document_id, box_id=box_id)
+        if success:
+            self.lexical_store.invalidate_box(box_id)
+        return success
 
     def list_files(self, box_id: str) -> List[str]:
         """Lists all unique filenames for a Box."""

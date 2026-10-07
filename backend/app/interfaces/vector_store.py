@@ -26,10 +26,10 @@ class IVectorStore(ABC):
         pass
 
     @abstractmethod
-    def search_similar(self, query_vector: list[float], query_text: str, box_id: str, limit: int = 5) -> list[dict]:
+    def search_dense(self, query_vector: list[float], box_id: str, limit: int = 20) -> list[dict]:
         """
-        Executes a hybrid search (vector similarity + lexical BM25) and orders by Reciprocal Rank Fusion (RRF).
-        Returns list of dicts containing chunk data and retrieval scores (embedding_score, lexical_score, rrf_score).
+        Executes a dense search (vector similarity using pgvector).
+        Returns list of dicts containing chunk data and retrieval scores (embedding_score).
         """
         pass
 

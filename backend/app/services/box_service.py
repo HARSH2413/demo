@@ -1,12 +1,14 @@
 from app.infrastructure.supabase_adapter import SupabaseAdapter
+from app.interfaces.lexical_store import ILexicalStore
 
 class BoxService:
     """
     Service layer for Box CRUD operations.
     Maintains architecture consistency.
     """
-    def __init__(self, db: SupabaseAdapter):
+    def __init__(self, db: SupabaseAdapter, lexical_store: ILexicalStore):
         self.db = db
+        self.lexical_store = lexical_store
 
     def create_box(self, name: str, user_id: str, description: str = None, domain: str = None) -> dict:
         return self.db.create_box(name, user_id, description, domain)
@@ -21,4 +23,7 @@ class BoxService:
         return self.db.update_box(box_id, user_id, data)
 
     def delete_box(self, box_id: str, user_id: str) -> bool:
-        return self.db.delete_box(box_id, user_id)
+        success = self.db.delete_box(box_id, user_id)
+        if success:
+            self.lexical_store.invalidate_box(box_id)
+        return success

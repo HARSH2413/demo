@@ -107,20 +107,19 @@ class SupabaseAdapter(IVectorStore):
         stop=stop_after_attempt(settings.DB_MAX_RETRIES),
         wait=wait_random_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception(is_transient_error),
-        before_sleep=lambda rs: logger.warning(f"Supabase search_similar retry (attempt {rs.attempt_number})"),
+        before_sleep=lambda rs: logger.warning(f"Supabase search_dense retry (attempt {rs.attempt_number})"),
     )
-    def search_similar(self, query_vector: list[float], query_text: str, box_id: str, limit: int = 10) -> list[dict]:
-        """Runs the Hybrid Search RPC in Supabase (Box scoped)."""
+    def search_dense(self, query_vector: list[float], box_id: str, limit: int = 20) -> list[dict]:
+        """Runs the Dense Search RPC in Supabase (Box scoped)."""
         response = self.client.rpc(
-            "match_documents_hybrid_box",
+            "match_documents_dense_box",
             {
                 "query_embedding": query_vector,
-                "query_text": query_text,
                 "match_box_id": box_id,
                 "match_count": limit,
             },
         ).execute()
-        logger.info(f"Hybrid search returned {len(response.data)} docs for box={box_id}")
+        logger.info(f"Dense search returned {len(response.data)} docs for box={box_id}")
         return response.data
 
     @retry(

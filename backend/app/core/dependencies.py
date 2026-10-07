@@ -10,6 +10,7 @@ from app.infrastructure.supabase_adapter import SupabaseAdapter
 from app.infrastructure.fastembed_adapter import FastEmbedAdapter
 from app.infrastructure.groq_adapter import GroqAdapter
 from app.infrastructure.reranker_adapter import FastEmbedRerankerAdapter
+from app.infrastructure.bm25s_adapter import BM25SAdapter
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
 from app.services.query_rewriter import QueryRewriter
@@ -46,6 +47,10 @@ def _get_llm_adapter() -> GroqAdapter:
 def _get_reranker_adapter() -> FastEmbedRerankerAdapter:
     return FastEmbedRerankerAdapter(model_name=settings.RERANKER_MODEL_NAME)
 
+@lru_cache()
+def _get_lexical_adapter() -> BM25SAdapter:
+    return BM25SAdapter(data_dir=".data/bm25")
+
 
 # ── Service Factories (called by FastAPI Depends) ──
 
@@ -56,17 +61,14 @@ def get_chat_service() -> ChatService:
 
     return ChatService(
         db=_get_db_adapter(),
+        lexical_store=_get_lexical_adapter(),
         embedder=_get_embedder_adapter(),
         llm=llm,
         reranker=_get_reranker_adapter(),
-        query_rewriter=query_rewriter,
         retrieval_top_k=settings.RETRIEVAL_TOP_K,
         reranker_top_k=settings.RERANKER_TOP_K,
         min_relevance_score=settings.MIN_RELEVANCE_SCORE,
         min_relevance_score_low=settings.MIN_RELEVANCE_SCORE_LOW,
-        enable_hyde=settings.ENABLE_HYDE,
-        enable_multi_query=settings.ENABLE_MULTI_QUERY,
-        enable_neighbor_context=settings.ENABLE_NEIGHBOR_CONTEXT,
     )
 
 
@@ -74,6 +76,7 @@ def get_ingestion_service() -> IngestionService:
     """FastAPI will call this to get a fully configured IngestionService."""
     return IngestionService(
         db=_get_db_adapter(),
+        lexical_store=_get_lexical_adapter(),
         embedder=_get_embedder_adapter(),
         chunk_size=settings.CHUNK_SIZE,
         chunk_overlap=settings.CHUNK_OVERLAP,
@@ -84,5 +87,6 @@ def get_ingestion_service() -> IngestionService:
 def get_box_service() -> BoxService:
     """FastAPI will call this to get a fully configured BoxService."""
     return BoxService(
-        db=_get_db_adapter()
+        db=_get_db_adapter(),
+        lexical_store=_get_lexical_adapter()
     )
