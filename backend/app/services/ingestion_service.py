@@ -311,7 +311,7 @@ class IngestionService:
                     else:
                         logger.warning(f"Retrying batch {batch_num}/{total_batches} for '{filename}' (attempt {attempt + 1})")
 
-            global_chunk_index += len(batch_chunks)
+            global_chunk_index += len(batch_data)
 
         if failed_batches > 0:
             logger.warning(f"Completed '{filename}' with {failed_batches}/{total_batches} failed batches")

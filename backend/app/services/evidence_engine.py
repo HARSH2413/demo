@@ -16,13 +16,16 @@ class EvidenceEngine:
         self.enable_neighbor_context = enable_neighbor_context
 
     def get_doc_relevance_score(self, doc: dict) -> float:
+        # Strict hierarchy: if reranker is used, that is the single source of truth for thresholding
         if "rerank_score" in doc and doc.get("rerank_score") is not None:
-            return float(doc.get("rerank_score", 0.0))
-        if "rrf_score" in doc and doc.get("rrf_score") is not None:
-            return float(doc.get("rrf_score", 0.0))
+            return float(doc.get("rerank_score"))
+        
+        # If no reranker is available, fallback to semantic embedding score.
+        # DO NOT use rrf_score as a thresholdable metric because it is rank-based (e.g. 1/60), not a similarity distance.
         if "embedding_score" in doc and doc.get("embedding_score") is not None:
-            return float(doc.get("embedding_score", 0.0))
-        return float(doc.get("embedding_score", 0.0))
+            return float(doc.get("embedding_score"))
+            
+        return 0.0
 
     def filter_and_expand(self, docs: list[dict]) -> list[dict]:
         filtered = self._dynamic_relevance_filter(docs)
@@ -59,60 +62,53 @@ class EvidenceEngine:
 
     def _expand_with_neighbors(self, docs: list) -> list:
         expanded = []
-        seen_filenames = set()
+        retrieved_set = {(doc.get("document_id"), doc.get("chunk_index")) for doc in docs}
         
         requests = []
-        doc_indices_to_expand = []
-        
-        for idx, doc in enumerate(docs):
-            filename = doc.get("filename", "")
-            
-            if filename in seen_filenames or not filename:
-                continue
-                
-            document_id = doc.get("document_id")
-            chunk_index = doc.get("chunk_index")
-            
-            if document_id is not None and chunk_index is not None:
-                seen_filenames.add(filename)
-                requests.append({"document_id": document_id, "chunk_index": chunk_index})
-                doc_indices_to_expand.append(idx)
+        for doc in docs:
+            doc_id = doc.get("document_id")
+            c_idx = doc.get("chunk_index")
+            if doc_id is not None and c_idx is not None:
+                requests.append({"document_id": doc_id, "chunk_index": c_idx})
                 
         bulk_neighbors = {}
         if requests:
             try:
-                bulk_neighbors = self.db.get_multi_neighboring_chunks(requests, limit=5)
+                # Fetch 3 chunks (prev, curr, next)
+                bulk_neighbors = self.db.get_multi_neighboring_chunks(requests, limit=3)
             except Exception as e:
                 logger.warning(f"Bulk neighbor expansion failed: {e}")
                 
-        seen_filenames.clear()
+        neighbor_map = {}
+        for doc_id, n_list in bulk_neighbors.items():
+            for n in n_list:
+                neighbor_map[(doc_id, n.get("chunk_index"))] = n.get("content", "")
+                
         for doc in docs:
-            filename = doc.get("filename", "")
-            document_id = doc.get("document_id")
+            doc_id = doc.get("document_id")
+            c_idx = doc.get("chunk_index")
             
-            if filename in seen_filenames or not filename or document_id not in bulk_neighbors:
+            if doc_id is None or c_idx is None:
                 expanded.append(doc)
-                if filename:
-                    seen_filenames.add(filename)
                 continue
                 
-            seen_filenames.add(filename)
-            neighbors = bulk_neighbors.get(document_id, [])
+            neighbor_texts = []
             
-            if neighbors and len(neighbors) > 1:
-                neighbor_texts = []
-                for n in neighbors:
-                    n_content = n.get("content", "")
-                    if n_content and n_content[:100] != doc.get("content", "")[:100]:
-                        neighbor_texts.append(n_content)
-
-                if neighbor_texts:
-                    enriched_doc = {**doc, "has_neighbor_context": True, "neighbor_context": "\n---\n".join(neighbor_texts[:2])}
-                    expanded.append(enriched_doc)
-                    logger.debug(f"Expanded '{filename}' with {len(neighbor_texts[:2])} neighbor chunks")
-                    continue
-                    
-            expanded.append(doc)
+            # Look for previous chunk
+            prev_idx = c_idx - 1
+            if (doc_id, prev_idx) not in retrieved_set and (doc_id, prev_idx) in neighbor_map:
+                neighbor_texts.append(neighbor_map[(doc_id, prev_idx)])
+                
+            # Look for next chunk
+            next_idx = c_idx + 1
+            if (doc_id, next_idx) not in retrieved_set and (doc_id, next_idx) in neighbor_map:
+                neighbor_texts.append(neighbor_map[(doc_id, next_idx)])
+                
+            if neighbor_texts:
+                enriched_doc = {**doc, "has_neighbor_context": True, "neighbor_context": "\n---\n".join(neighbor_texts)}
+                expanded.append(enriched_doc)
+            else:
+                expanded.append(doc)
 
         return expanded
 
@@ -154,33 +150,60 @@ class EvidenceEngine:
         return False
 
     def assign_evidence_ids(self, docs: list[dict]) -> list[dict]:
-        """Assigns deterministic evidence IDs [E1], [E2] to the filtered documents."""
-        for i, doc in enumerate(docs):
-            doc["evidence_id"] = f"[E{i+1}]"
+        """Assigns deterministic evidence IDs [E1], [E2] grouped by document."""
+        doc_id_to_evidence = {}
+        evidence_counter = 1
+        
+        for doc in docs:
+            doc_id = doc.get("document_id")
+            if not doc_id:
+                doc["evidence_id"] = f"[E{evidence_counter}]"
+                evidence_counter += 1
+                continue
+                
+            if doc_id not in doc_id_to_evidence:
+                doc_id_to_evidence[doc_id] = f"[E{evidence_counter}]"
+                evidence_counter += 1
+                
+            doc["evidence_id"] = doc_id_to_evidence[doc_id]
+            
         return docs
 
     def build_context_text(self, docs: list[dict]) -> str:
-        context_parts = []
+        from collections import defaultdict
+        groups = defaultdict(list)
         for doc in docs:
-            score_label = ""
-            if "rerank_score" in doc:
-                score_label = f" [relevance: {doc['rerank_score']:.2f}]"
-            neighbor_label = " [+ neighboring context]" if doc.get("has_neighbor_context") else ""
+            groups[doc.get("evidence_id", "[E?]")].append(doc)
             
-            evidence_id = doc.get("evidence_id", "[E?]")
+        context_parts = []
+        for evidence_id, group_docs in groups.items():
+            group_docs.sort(key=lambda x: x.get("chunk_index", 0))
+            first_doc = group_docs[0]
+            filename = first_doc.get("filename", "")
             
-            meta = doc.get("metadata") or {}
-            context_header = meta.get("context_header", f"[Document: {doc.get('filename')}]")
+            max_score = max((self.get_doc_relevance_score(d) for d in group_docs), default=0.0)
+            score_label = f" [relevance: {max_score:.2f}]" if max_score > 0 else ""
             
-            neighbor_context_text = ""
-            if doc.get("has_neighbor_context") and doc.get("neighbor_context"):
-                neighbor_context_text = f"\n[SURROUNDING CONTEXT FROM SAME DOCUMENT]\n{doc['neighbor_context']}\n"
+            chunk_texts = []
+            for doc in group_docs:
+                meta = doc.get("metadata") or {}
+                ctx_head = doc.get("section_title") or meta.get("context_header", "")
+                
+                text = doc.get("content", "")
+                if doc.get("has_neighbor_context") and doc.get("neighbor_context"):
+                    text = f"{text}\n\n[SURROUNDING CONTEXT FROM SAME DOCUMENT]\n{doc['neighbor_context']}"
+                    
+                if ctx_head:
+                    chunk_texts.append(f"({ctx_head})\n{text}")
+                else:
+                    chunk_texts.append(text)
+                    
+            combined_content = "\n\n...\n\n".join(chunk_texts)
             
             context_parts.append(
                 f"--- EVIDENCE {evidence_id} ---\n"
-                f"Source: {doc.get('filename')}{score_label}{neighbor_label}\n"
-                f"Context: {context_header}\n"
-                f"Content: {doc.get('content')}{neighbor_context_text}\n"
+                f"Source: {filename}{score_label}\n"
+                f"Content:\n{combined_content}\n"
                 f"----------------------"
             )
         return "\n\n".join(context_parts)

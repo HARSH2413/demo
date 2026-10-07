@@ -41,11 +41,11 @@ class Settings(BaseSettings):
     RERANKER_MODEL_NAME: str = "Xenova/ms-marco-MiniLM-L-12-v2"
     RETRIEVAL_TOP_K: int = 20          # faster default; can override in .env for max-accuracy mode
     RERANKER_TOP_K: int = 5            # faster default; can override in .env
-    MIN_RELEVANCE_SCORE: float = 0.3   # keep balanced precision by default
-    MIN_RELEVANCE_SCORE_LOW: float = 0.1  # dynamic floor when few results survive
+    MIN_RELEVANCE_SCORE: float = 0.15  # Documented threshold for usable evidence
+    MIN_RELEVANCE_SCORE_LOW: float = 0.05  # Absolute floor to prevent garbage matches
     # A question must meet this score before the assistant is allowed to answer.
-    # Keep this higher than the retrieval fallback floor to prevent off-topic answers.
-    ANSWER_MIN_RELEVANCE_SCORE: float = 0.3
+    # We calibrate this slightly lower than MIN_RELEVANCE_SCORE so we don't accidentally block valid answers.
+    ANSWER_MIN_RELEVANCE_SCORE: float = 0.12
     ENABLE_QUERY_REWRITE: bool = False  # LLM-based query rewriting for multi-turn
     ENABLE_HYDE: bool = False          # expensive; enable in .env when needed
     ENABLE_MULTI_QUERY: bool = False   # expensive; enable in .env when needed
