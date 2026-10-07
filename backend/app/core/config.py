@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
 
     # ── Answer Formatting & Structure ──
-    ENABLE_STRUCTURED_ANSWERS: bool = True  # Enable hierarchical answer structure
+    ENABLE_STRUCTURED_ANSWERS: bool = False  # Enable hierarchical answer structure
     ENABLE_KEY_TAKEAWAYS: bool = False  # extra LLM call; enable in .env when needed
     ENABLE_RELATED_QUESTIONS: bool = False  # extra LLM call; enable in .env when needed
     RELATED_QUESTIONS_COUNT: int = 3  # Number of related questions to generate

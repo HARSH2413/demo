@@ -118,9 +118,11 @@ class EvidenceEngine:
 
         scores = [self.get_doc_relevance_score(doc) for doc in docs]
         top_score = max(scores)
-        unique_files = set(doc.get("filename", "") for doc in docs)
+        
+        # Calculate source diversity using document_id, not filename
+        unique_docs = set(doc.get("document_id") for doc in docs if doc.get("document_id"))
 
-        if len(unique_files) >= 3 and top_score >= 0.5:
+        if len(unique_docs) >= 3 and top_score >= 0.5:
             score_spread = max(scores) - min(scores)
             if score_spread > 0.3:
                 return "multi_source"
