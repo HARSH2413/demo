@@ -81,6 +81,16 @@ class SupabaseAdapter(IVectorStore):
         if error_message is not None:
             update_data["error_message"] = error_message
         self.client.table("documents").update(update_data).eq("id", document_id).execute()
+
+    @retry(
+        stop=stop_after_attempt(settings.DB_MAX_RETRIES),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception(is_transient_error),
+        before_sleep=lambda rs: logger.warning(f"Supabase update_document_summary retry (attempt {rs.attempt_number})"),
+    )
+    def update_document_summary(self, document_id: str, summary: str) -> None:
+        """Updates the generated summary of a document."""
+        self.client.table("documents").update({"summary": summary}).eq("id", document_id).execute()
         
     @retry(
         stop=stop_after_attempt(settings.DB_MAX_RETRIES),

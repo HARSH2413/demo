@@ -4,6 +4,7 @@ Upload API — stream-hashed file uploads to prevent memory spikes.
 import os
 import hashlib
 import tempfile
+import uuid
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks
 from starlette.concurrency import run_in_threadpool
@@ -11,6 +12,11 @@ from app.services.ingestion_service import IngestionService
 from app.core.dependencies import get_ingestion_service
 from app.core.config import settings
 from app.core.logger import logger
+
+# ARCHITECTURE NOTE:
+# This pipeline currently uses FastAPI BackgroundTasks for ingestion.
+# This is a non-durable queue. If the server restarts, ongoing ingestion tasks are lost.
+# For production scale, this should be migrated to a durable task queue like Celery, Redis Queue (RQ), or Temporal.
 
 router = APIRouter(prefix="/api/v1/upload", tags=["Document Management"])
 
@@ -75,8 +81,8 @@ async def upload_document(
 
         file_hash = sha256.hexdigest()
 
-        # 2. Rename temp file to hash-based filename
-        file_path = os.path.join(TEMP_DIR, f"{file_hash}{safe_ext}")
+        # 2. Rename temp file to hash-based filename with UUID to prevent concurrent collision
+        file_path = os.path.join(TEMP_DIR, f"{file_hash}_{uuid.uuid4().hex}{safe_ext}")
         os.replace(temp_path, file_path)
 
         # 3. Create document record immediately to prevent race conditions and mark as processing
@@ -92,11 +98,32 @@ async def upload_document(
                 }
             )
         except Exception as e:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            if "unique_document_hash_per_box" in str(e) or "duplicate key" in str(e):
-                raise HTTPException(status_code=409, detail="Exact file content already exists. Duplicate rejected.")
-            raise HTTPException(status_code=500, detail="Failed to initialize document processing.")
+            err_str = str(e).lower()
+            if "unique" in err_str or "duplicate" in err_str or "23505" in err_str:
+                # Check if it's a failed document we can overwrite
+                existing = await run_in_threadpool(ingestion_service.db.get_document_metadata, box_id)
+                failed_doc = next((d for d in existing if d.get("file_hash") == file_hash and d.get("status") == "failed"), None)
+                if failed_doc:
+                    logger.info(f"Retrying failed document {failed_doc['id']}.")
+                    await run_in_threadpool(ingestion_service.db.delete_document, document_id=failed_doc["id"], box_id=box_id)
+                    document_id = await run_in_threadpool(
+                        ingestion_service.db.create_document,
+                        {
+                            "box_id": box_id,
+                            "filename": original_filename,
+                            "file_hash": file_hash,
+                            "mime_type": file.content_type or expected_mime,
+                            "status": "processing"
+                        }
+                    )
+                else:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    raise HTTPException(status_code=409, detail="Exact file content already exists. Duplicate rejected.")
+            else:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                raise HTTPException(status_code=500, detail="Failed to initialize document processing.")
 
         background_tasks.add_task(
             _process_upload_safely,

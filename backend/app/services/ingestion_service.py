@@ -337,8 +337,9 @@ class IngestionService:
                     table = Table(child, doc_file)
                     content.append("[TABLE]")
                     for row in table.rows:
-                        row_text = " | ".join(cell.text.strip().replace("\n", " ") for cell in row.cells if cell.text.strip())
-                        if row_text:
+                        # Keep empty cells so we don't shift columns
+                        row_text = " | ".join(cell.text.strip().replace("\n", " ") for cell in row.cells)
+                        if row_text.strip(" |"):
                             content.append(row_text)
 
             return "\n\n".join(content)
@@ -386,14 +387,17 @@ class IngestionService:
                 ws = wb[sheet_name]
                 all_text.append(f"--- Sheet: {sheet_name} ---")
 
-                rows = list(ws.iter_rows(values_only=True))
-                if not rows:
+                # Iterate without casting to list to save memory
+                rows_iter = ws.iter_rows(values_only=True)
+                try:
+                    first_row = next(rows_iter)
+                except StopIteration:
                     continue
 
                 # Use first row as headers
-                headers = [str(h) if h else f"Col{i}" for i, h in enumerate(rows[0])]
+                headers = [str(h) if h else f"Col{i}" for i, h in enumerate(first_row)]
 
-                for row in rows[1:]:
+                for row in rows_iter:
                     row_text = " | ".join(
                         f"{headers[i]}: {str(cell)}"
                         for i, cell in enumerate(row)
@@ -437,9 +441,9 @@ class IngestionService:
         try:
             summary = self.llm.generate_response(
                 system_prompt=(
-                    "You are a document summarizer. Given the beginning of a document, "
+                    "You are a document summarizer. Given only a partial preview of the beginning of a document, "
                     "write a concise 3-5 sentence summary describing what the document contains, "
-                    "its key topics, and its purpose. Be factual and specific."
+                    "its key topics, and its apparent purpose. Do NOT infer or hallucinate unseen content."
                 ),
                 user_prompt=f"Document: {filename} (Type: {file_type})\n\nContent preview:\n{text_preview[:2500]}",
                 temperature=0.0,
@@ -449,18 +453,8 @@ class IngestionService:
                 logger.warning(f"Summary generation returned empty result for '{filename}'")
                 return
 
-            # Store summary as a special chunk with [SUMMARY] prefix
-            summary_content = f"[DOCUMENT SUMMARY] {filename}\n\n{summary}"
-            contextual_text = f"[Document: {filename} | Type: {file_type} | Summary]\n\n{summary_content}"
-            summary_embedding = self.embedder.embed_text([contextual_text])[0]
-
-            self.db.save_document_chunks([{
-                "document_id": document_id,
-                "content": summary_content,
-                "embedding": summary_embedding,
-                "chunk_index": 0,
-                "metadata": {"type": "summary"}
-            }])
+            # Store summary in the documents table directly
+            self.db.update_document_summary(document_id, summary)
 
             logger.info(f"Generated and stored document summary for '{filename}'")
 

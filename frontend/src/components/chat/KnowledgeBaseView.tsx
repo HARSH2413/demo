@@ -12,6 +12,7 @@ export interface DocumentRecord {
   file_hash?: string;
   created_at?: string;
   status?: 'processing' | 'indexed' | 'failed' | 'completed';
+  error_message?: string;
   size?: number;
 }
 
@@ -239,8 +240,15 @@ export function KnowledgeBaseView({
                           {type === 'PDF'
                             ? <FileType2 className="w-5 h-5 text-rose-500 shrink-0" />
                             : <FileText className="w-5 h-5 text-[#4f46e5] shrink-0" />}
-                          <div className="font-medium text-slate-900 group-hover:text-[#4f46e5] transition-colors truncate max-w-xs md:max-w-md" title={doc.filename}>
-                            {doc.filename}
+                          <div className="flex flex-col">
+                            <div className="font-medium text-slate-900 group-hover:text-[#4f46e5] transition-colors truncate max-w-xs md:max-w-md" title={doc.filename}>
+                              {doc.filename}
+                            </div>
+                            {doc.status === 'failed' && doc.error_message && (
+                              <div className="text-[11px] text-rose-600 mt-0.5 line-clamp-1" title={doc.error_message}>
+                                {doc.error_message}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>

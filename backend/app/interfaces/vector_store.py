@@ -43,6 +43,11 @@ class IVectorStore(ABC):
     def delete_document(self, document_id: str, box_id: str) -> bool:
         """Deletes a document and its chunks via cascading delete."""
         pass
+
+    @abstractmethod
+    def update_document_summary(self, document_id: str, summary: str) -> None:
+        """Updates the generated summary of a document."""
+        pass
         
     @abstractmethod
     def delete_chunks_by_document(self, document_id: str) -> None:

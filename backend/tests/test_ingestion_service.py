@@ -68,6 +68,21 @@ def test_process_file_background_partial_failure_cleans_up(ingestion_service, tm
     # Assert file cleanup happened anyway
     assert not test_file.exists()
 
+def test_process_file_background_ocr_detection(ingestion_service, tmp_path):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("   \n  \t  ") # Empty/whitespace only
+    
+    with pytest.raises(ValueError) as exc_info:
+        ingestion_service.process_file_background(
+            file_path=str(test_file),
+            filename="test.txt",
+            file_hash="dummyhash",
+            box_id="box-123",
+            document_id="doc-123"
+        )
+        
+    assert "requires OCR" in str(exc_info.value)
+
 def test_process_file_background_fatal_failure_cleans_up(ingestion_service, tmp_path):
     test_file = tmp_path / "test.txt"
     test_file.write_text("dummy text")
