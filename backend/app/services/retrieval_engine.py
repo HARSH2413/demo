@@ -162,7 +162,7 @@ class RetrievalEngine:
                     limit=search_limit,
                 )
                 for doc in docs:
-                    content_key = doc.get("content", "")[:100]
+                    content_key = (doc.get("document_id"), doc.get("chunk_index"))
                     existing = all_docs.get(content_key)
                     score = doc.get("rrf_score") or doc.get("embedding_score") or 0.0
                     existing_score = existing.get("rrf_score") or existing.get("embedding_score") or 0.0 if existing else -1.0

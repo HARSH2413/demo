@@ -233,21 +233,38 @@ class IngestionService:
         total_batches = (total_chunks + self.batch_size - 1) // self.batch_size
         failed_batches = 0
         global_chunk_index = 1
+        
+        def extract_section_title(text: str, current_title: str) -> str:
+            lines = text.split("\n")
+            title = current_title
+            for line in lines:
+                line_stripped = line.strip()
+                if line_stripped.startswith("## "):
+                    title = line_stripped.lstrip("#").strip()
+                elif line_stripped.startswith("--- Sheet: ") and line_stripped.endswith(" ---"):
+                    title = line_stripped.replace("--- Sheet:", "").replace("---", "").strip()
+            return title
+
+        current_section = ""
+        enriched_chunks = []
+        for chunk in chunks:
+            current_section = extract_section_title(chunk, current_section)
+            enriched_chunks.append((chunk, current_section))
 
         for i in range(0, total_chunks, self.batch_size):
             batch_num = i // self.batch_size + 1
-            batch_chunks = chunks[i : i + self.batch_size]
+            batch_data = enriched_chunks[i : i + self.batch_size]
 
             max_retries = 3
             for attempt in range(max_retries):
                 try:
                     headers = [
                         f"[Document: {filename} | Type: {file_type} | Chunk {i + j + 1}/{total_chunks}]"
-                        for j in range(len(batch_chunks))
+                        for j in range(len(batch_data))
                     ]
                     contextual_batch = [
-                        f"{headers[j]}\n\n{chunk}"
-                        for j, chunk in enumerate(batch_chunks)
+                        f"{headers[j]}\n\n{item[0]}"
+                        for j, item in enumerate(batch_data)
                     ]
 
                     embeddings = self.embedder.embed_text(contextual_batch)
@@ -256,15 +273,16 @@ class IngestionService:
                     records = [
                         {
                             "document_id": document_id,
-                            "content": chunk,
+                            "content": item[0],
                             "embedding": embeddings[j],
                             "chunk_index": global_chunk_index + j,
+                            "section_title": item[1] if item[1] else None,
                             "metadata": {
                                 "type": file_type,
                                 "context_header": headers[j]
                             }
                         }
-                        for j, chunk in enumerate(batch_chunks)
+                        for j, item in enumerate(batch_data)
                     ]
 
                     self.db.save_document_chunks(records)

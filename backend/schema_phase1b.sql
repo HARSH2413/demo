@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON public.document_chun
 -- Trigger for auto-updating content_tsvector
 CREATE OR REPLACE FUNCTION document_chunks_tsvector_trigger() RETURNS trigger AS $$
 BEGIN
-  NEW.content_tsvector := to_tsvector('english', NEW.content);
+  NEW.content_tsvector := to_tsvector('english', COALESCE(NEW.section_title, '') || ' ' || NEW.content);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
