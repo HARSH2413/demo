@@ -41,12 +41,21 @@ def test_process_file_background_success(ingestion_service, tmp_path):
 
 def test_process_file_background_partial_failure_cleans_up(ingestion_service, tmp_path):
     test_file = tmp_path / "test.txt"
-    test_file.write_text("dummy text")
+    test_file.write_text("chunk 1 text\n\nchunk 2 text")
     
-    ingestion_service._extract_text_from_disk = MagicMock(return_value="dummy text")
+    ingestion_service._extract_text_from_disk = MagicMock(return_value="chunk 1 text\n\nchunk 2 text")
+    # Force 2 chunks
+    ingestion_service.text_splitter.split_text = MagicMock(return_value=["chunk 1 text", "chunk 2 text"])
+    # Force batch size of 1
+    ingestion_service.batch_size = 1
     
-    # Simulate a failure during embedding that fails all 3 retries
-    ingestion_service.embedder.embed_text.side_effect = Exception("Embedding failed")
+    # Batch 1 passes, Batch 2 fails all retries
+    def mock_embed_text(texts):
+        if "chunk 1" in texts[0]:
+            return [[0.1, 0.2]]
+        raise Exception("Embedding failed")
+        
+    ingestion_service.embedder.embed_text.side_effect = mock_embed_text
     
     with pytest.raises(PartialIngestionError) as exc_info:
         ingestion_service.process_file_background(
@@ -58,6 +67,12 @@ def test_process_file_background_partial_failure_cleans_up(ingestion_service, tm
         )
         
     assert "failed batches" in str(exc_info.value)
+    
+    # Assert partial chunks cleanup WAS called
+    assert ingestion_service.db.delete_chunks_by_document.called
+    
+    # Verify save_document_chunks was called at least once (for chunk 1)
+    assert ingestion_service.db.save_document_chunks.called
     
     # Assert partial chunks cleanup WAS called (we no longer preserve chunks)
     assert ingestion_service.db.delete_chunks_by_document.called

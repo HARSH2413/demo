@@ -71,6 +71,41 @@ def test_upload_duplicate_rejection(mock_verify):
     assert "Duplicate rejected" in response.json()["detail"]
 
 @patch('app.api.upload.verify_box_access')
+def test_upload_retry_failed_document(mock_verify):
+    mock_verify.return_value = None
+    # Simulate DB unique constraint violation
+    mock_ingestion_service.db.create_document.side_effect = [
+        Exception("duplicate key value violates unique constraint 'unique_document_hash_per_box'"),
+        "doc-retry-123"  # Second call (after delete) succeeds
+    ]
+    # Return a failed document to simulate retry
+    mock_ingestion_service.db.get_document_metadata.return_value = [
+        {
+            "id": "old-failed-doc",
+            "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", # SHA-256 of empty string, but since we are mocking, it might be different. Let's not hardcode the exact hash if possible, wait, upload.py computes it.
+            "status": "failed"
+        }
+    ]
+
+    file_content = b""
+    import hashlib
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    mock_ingestion_service.db.get_document_metadata.return_value[0]["file_hash"] = file_hash
+
+    response = client.post(
+        "/api/v1/upload/box",
+        data={"box_id": "test-box-id"},
+        files={"file": ("retry.txt", io.BytesIO(file_content), "text/plain")}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+    
+    mock_ingestion_service.db.get_document_metadata.assert_called_once_with("test-box-id")
+    mock_ingestion_service.db.delete_document.assert_called_once_with(document_id="old-failed-doc", box_id="test-box-id")
+    assert mock_ingestion_service.db.create_document.call_count == 2
+
+@patch('app.api.upload.verify_box_access')
 def test_upload_invalid_extension(mock_verify):
     mock_verify.return_value = None
     response = client.post(
