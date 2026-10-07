@@ -83,7 +83,20 @@ export default function BoxesClient({ userName = '' }: { userName?: string }) {
     try {
       setIsCreating(true);
       setError(null);
-      const body: Record<string, string> = { name: newBoxName.trim(), domain: newBoxDomain };
+      
+      // Map human-readable domain to backend enum
+      let backendDomain = "general";
+      const d = newBoxDomain.toLowerCase();
+      if (d.includes('finance')) backendDomain = 'finance';
+      else if (d.includes('legal')) backendDomain = 'legal';
+      else if (d.includes('human')) backendDomain = 'human_resources';
+      else if (d.includes('engineering')) backendDomain = 'engineering';
+      else if (d.includes('sales')) backendDomain = 'sales';
+      else if (d.includes('marketing')) backendDomain = 'marketing';
+      else if (d.includes('operations')) backendDomain = 'operations';
+      else if (d.includes('compliance')) backendDomain = 'compliance';
+
+      const body: Record<string, string> = { name: newBoxName.trim(), domain: backendDomain };
       if (newBoxDescription.trim()) body.description = newBoxDescription.trim();
       const res = await apiFetch<SingleBoxResponse>('/api/v1/boxes/', {
         method: 'POST',

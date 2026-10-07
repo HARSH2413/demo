@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { signup } from '../auth/actions'
 import { Eye, EyeOff, Sparkles } from 'lucide-react'
 import { SubmitButton } from '@/components/auth/SubmitButton'
-import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
 
 export default function SignupPage({
     searchParams,
@@ -43,18 +42,7 @@ export default function SignupPage({
           <p className="text-slate-500 text-sm mt-1.5">Start your private AI knowledge base</p>
         </div>
 
-        {/* Google Sign-Up */}
-        <GoogleSignInButton />
 
-        {/* Divider */}
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-200"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-3 bg-white text-slate-500 font-medium">or sign up with email</span>
-          </div>
-        </div>
 
         <form action={signup} onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">

@@ -10,6 +10,33 @@ from app.core.rate_limiter import limiter
 from app.core.config import settings
 from app.core.logger import logger
 from app.core.auth import get_current_user, verify_box_access, UserContext
+import os
+from groq import Groq
+
+def check_prompt_injection(prompt: str) -> bool:
+    """Returns True if the prompt is detected as a jailbreak or injection."""
+    groq_api_key = os.environ.get("GROQ_API_KEY")
+    if not groq_api_key:
+        return False
+        
+    try:
+        client = Groq(api_key=groq_api_key)
+        completion = client.chat.completions.create(
+            model="meta-llama/llama-prompt-guard-2-86m",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=10,
+        )
+        content = completion.choices[0].message.content.strip()
+        # Prompt Guard 2 returns a probability float
+        score = float(content)
+        if score > 0.5:
+            logger.warning(f"Prompt injection detected | score={score:.4f}")
+            return True
+        return False
+    except Exception as e:
+        logger.warning(f"Prompt guard check failed, bypassing: {e}")
+        return False
 
 router = APIRouter(prefix="/api/v1/chat", tags=["Enterprise Q&A"])
 
@@ -164,6 +191,9 @@ async def chat_with_documents(
     if not verify_box_access(chat_request.box_id, user.user_id):
         raise HTTPException(status_code=403, detail="Access denied to this box.")
     try:
+        if check_prompt_injection(chat_request.question):
+            raise HTTPException(status_code=400, detail="Request blocked by Prompt Guard.")
+            
         if not chat_service.db.session_belongs_to_box(chat_request.session_id, chat_request.box_id):
             raise HTTPException(status_code=404, detail="Chat session not found.")
         response = chat_service.ask_question(

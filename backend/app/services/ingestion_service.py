@@ -178,6 +178,7 @@ class IngestionService:
                             records = [
                                 {
                                     "document_id": document_id,
+                                    "box_id": box_id,
                                     "content": chunk,
                                     "embedding": embeddings[j],
                                     "chunk_index": global_chunk_index + j,
@@ -288,6 +289,7 @@ class IngestionService:
                     records = [
                         {
                             "document_id": document_id,
+                            "box_id": box_id,
                             "content": item[0],
                             "embedding": embeddings[j],
                             "chunk_index": global_chunk_index + j,
