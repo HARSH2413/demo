@@ -87,20 +87,19 @@ class ChatService:
         except Exception as e:
             logger.warning(f"Failed to fetch chat history, continuing without it: {e}")
 
-        # 3. ✨ Query Rewriting — resolve multi-turn context
+        # 3. Use original question for first pass (no rewrite yet)
         rewrite_start = time.perf_counter()
         search_query = question
-        if self.query_rewriter:
-            try:
-                search_query = self.query_rewriter.rewrite(question, chat_history)
-            except Exception as e:
-                logger.warning(f"Query rewriting failed, using original: {e}")
-                search_query = question
         rewrite_ms = (time.perf_counter() - rewrite_start) * 1000
 
         # 4-8. Retrieval Pipeline (normal pass)
         retrieval_start = time.perf_counter()
-        retrieved_docs = self.retrieval_engine.retrieve_documents(search_query=search_query, box_id=box_id)
+        retrieved_docs = self.retrieval_engine.retrieve_documents(
+            search_query=search_query, 
+            box_id=box_id,
+            force_hyde=False,
+            force_multi_query=False
+        )
         retrieved_docs = self.evidence_engine.filter_and_expand(retrieved_docs)
         retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
 
@@ -111,7 +110,18 @@ class ChatService:
         # 9b. Accuracy rescue pass: retry once only when evidence is genuinely weak.
         if self.evidence_engine.should_run_accuracy_rescue(confidence_level, retrieved_docs):
             rescue_start = time.perf_counter()
-            rescue_docs = self.retrieval_engine.execute_accuracy_rescue(search_query=search_query, box_id=box_id)
+            
+            # ✨ Query Rewriting ONLY happens if first pass fails
+            rescue_query = search_query
+            if self.query_rewriter:
+                try:
+                    logger.info("First pass failed; executing query rewriting for rescue pass...")
+                    rescue_query = self.query_rewriter.rewrite(question, chat_history)
+                except Exception as e:
+                    logger.warning(f"Query rewriting failed during rescue, using original: {e}")
+                    rescue_query = search_query
+
+            rescue_docs = self.retrieval_engine.execute_accuracy_rescue(search_query=rescue_query, box_id=box_id)
             rescue_docs = self.evidence_engine.filter_and_expand(rescue_docs)
             rescue_ms = (time.perf_counter() - rescue_start) * 1000
             rescue_confidence = self.evidence_engine.determine_confidence(rescue_docs)
@@ -232,8 +242,12 @@ class ChatService:
         # 19. Citation Builder (with re-rank scores)
         citations = []
         if fallback_phrase not in answer:
+            # Normalize full-width brackets like 【E1】 to [E1] for clean UI rendering and parsing
+            answer = re.sub(r'【(E\d+)】', r'[\1]', answer)
+            
             # Parse [E<number>] references from the answer
-            used_evidence_ids = set(re.findall(r'\[E\d+\]', answer))
+            found_numbers = set(re.findall(r'[\[\(\s]E(\d+)[\]\)\s]', answer))
+            used_evidence_ids = {f"[E{num}]" for num in found_numbers}
             
             for doc in retrieved_docs:
                 evidence_id = doc.get("evidence_id")
