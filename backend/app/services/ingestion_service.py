@@ -113,6 +113,20 @@ class IngestionService:
             failed_batches = 0
             all_text_for_summary = []  # Collect first pages for summary generation
             global_chunk_index = 1
+            
+            # Extract PDF Table of Contents for deterministic section titles
+            toc = doc.get_toc()
+            page_to_section = {}
+            current_section = None
+            if toc:
+                # toc format: [[lvl, title, page_num], ...]
+                toc_sorted = sorted(toc, key=lambda x: x[2])
+                toc_idx = 0
+                for p in range(1, total_pages + 1):
+                    while toc_idx < len(toc_sorted) and toc_sorted[toc_idx][2] <= p:
+                        current_section = toc_sorted[toc_idx][1]
+                        toc_idx += 1
+                    page_to_section[p] = current_section
     
             for page_start in range(0, total_pages, PDF_PAGE_BATCH_SIZE):
                 page_end = min(page_start + PDF_PAGE_BATCH_SIZE, total_pages)
@@ -169,6 +183,7 @@ class IngestionService:
                                     "chunk_index": global_chunk_index + j,
                                     "page_start": page_start + 1,
                                     "page_end": page_end,
+                                    "section_title": page_to_section.get(page_start + 1),
                                     "metadata": {
                                         "type": file_type,
                                         "context_header": headers[j]

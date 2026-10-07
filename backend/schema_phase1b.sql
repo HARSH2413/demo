@@ -191,7 +191,7 @@ BEGIN
     lexical_search AS (
         SELECT 
             dc.id,
-            ts_rank_cd(dc.content_tsvector, websearch_to_tsquery('english', query_text)) AS lexical_score,
+            ts_rank_cd(dc.content_tsvector, websearch_to_tsquery('english', query_text))::float AS lexical_score,
             ROW_NUMBER() OVER (ORDER BY ts_rank_cd(dc.content_tsvector, websearch_to_tsquery('english', query_text)) DESC) AS lexical_rank
         FROM public.document_chunks dc
         JOIN public.documents d ON dc.document_id = d.id

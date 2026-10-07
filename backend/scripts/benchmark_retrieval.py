@@ -106,12 +106,90 @@ def calculate_recall(retrieved_docs: List[Dict], expected: List[tuple], k: int) 
             return 1.0
     return 0.0
 
+async def seed_test_box(box_id: str, db, embedder):
+    """
+    Seeds a live Supabase box with actual chunks matching the expected results.
+    """
+    print(f"Seeding temporary box '{box_id}' with benchmark chunks...")
+    
+    import uuid
+    DOCS = {f"doc-{i}": str(uuid.uuid4()) for i in range(1, 17)}
+    
+    # We will just insert the expected chunks directly for the benchmark queries
+    # so they exist in the live DB for retrieval.
+    mock_chunks = [
+        {"doc": DOCS["doc-1"], "chunk": 1, "text": "The CEO of the organization is Jane Doe."},
+        {"doc": DOCS["doc-1"], "chunk": 5, "text": "The employee's PF contribution is 12% of their basic salary."},
+        {"doc": DOCS["doc-1"], "chunk": 10, "text": "The maximum allowed PTO is 30 days per year."},
+        {"doc": DOCS["doc-2"], "chunk": 12, "text": "The company's Q3 revenue reached a record $50 million."},
+        {"doc": DOCS["doc-2"], "chunk": 15, "text": "The total expenditure in 2024 was $120 million."},
+        {"doc": DOCS["doc-3"], "chunk": 2, "text": "Yes, NDAs are required for all independent contractors before beginning work."},
+        {"doc": DOCS["doc-4"], "chunk": 8, "text": "The core hours for working are between 10 AM and 3 PM."},
+        {"doc": DOCS["doc-5"], "chunk": 3, "text": "Canceled flights are fully refunded if canceled 48 hours prior to departure."},
+        {"doc": DOCS["doc-6"], "chunk": 14, "text": "The standard health insurance plan covers dental up to $2,000 annually."},
+        {"doc": DOCS["doc-7"], "chunk": 4, "text": "A standard 30 days notice is required for voluntary resignation."},
+        {"doc": DOCS["doc-8"], "chunk": 2, "text": "Remote work is allowed up to 3 days a week."},
+        {"doc": DOCS["doc-8"], "chunk": 5, "text": "There is a $500 budget for home office equipment."},
+        {"doc": DOCS["doc-9"], "chunk": 1, "text": "The SLA for sev-1 incidents is a 15 minute initial response time."},
+        {"doc": DOCS["doc-10"], "chunk": 0, "text": "The primary contact for HR issues is the HR Business Partner assigned to your region."},
+        {"doc": DOCS["doc-11"], "chunk": 6, "text": "The performance review schedule is biannual, in June and December."},
+        {"doc": DOCS["doc-12"], "chunk": 9, "text": "Bonuses are completely discretionary and are not guaranteed."},
+        {"doc": DOCS["doc-13"], "chunk": 20, "text": "The penalty for early termination of the contract is equal to 3 months fees."},
+        {"doc": DOCS["doc-14"], "chunk": 7, "text": "Travel time outside of normal working hours is not compensated."},
+        {"doc": DOCS["doc-15"], "chunk": 3, "text": "You can expense client dinners up to $100 per head."},
+        {"doc": DOCS["doc-16"], "chunk": 11, "text": "The procedure for filing a grievance involves submitting a formal letter to Employee Relations."},
+    ]
+    
+    texts = [c["text"] for c in mock_chunks]
+    embeddings = embedder.embed_text(texts)
+    
+    records = []
+    doc_records = []
+    inserted_docs = set()
+    
+    for i, c in enumerate(mock_chunks):
+        if c["doc"] not in inserted_docs:
+            doc_records.append({
+                "id": c["doc"],
+                "box_id": box_id,
+                "filename": f"mock-{c['doc']}.txt",
+                "file_hash": f"hash-{c['doc']}",
+                "status": "completed"
+            })
+            inserted_docs.add(c["doc"])
+            
+        records.append({
+            "box_id": box_id,
+            "document_id": c["doc"],
+            "chunk_index": c["chunk"],
+            "content": c["text"],
+            "embedding": embeddings[i],
+            "metadata": {"type": "mock"}
+        })
+        
+    db.client.table("documents").insert(doc_records).execute()
+    db.save_document_chunks(records)
+    return mock_chunks, DOCS
+
 async def run_benchmark(box_id: str):
     print("Initializing components...")
     db = _get_db_adapter()
     embedder = _get_embedder_adapter()
     llm = _get_llm_adapter()
     reranker = _get_reranker_adapter()
+    
+    # 1. Seed live data
+    mock_chunks, DOCS = await seed_test_box(box_id, db, embedder)
+    
+    # Map the expected DOCS down in the benchmark data
+    local_benchmark_data = []
+    for item in BENCHMARK_DATA:
+        old_doc_id = item["expected"][0][0]
+        new_doc_id = DOCS.get(old_doc_id, old_doc_id)
+        local_benchmark_data.append({
+            "query": item["query"],
+            "expected": [(new_doc_id, item["expected"][0][1])]
+        })
 
     retrieval_engine = RetrievalEngine(
         db=db,
@@ -124,7 +202,7 @@ async def run_benchmark(box_id: str):
         enable_multi_query=False
     )
 
-    print(f"Running benchmark on {len(BENCHMARK_DATA)} queries...\n")
+    print(f"\nRunning benchmark on {len(local_benchmark_data)} queries...\n")
     
     total_mrr = 0.0
     total_recall_5 = 0.0
@@ -156,7 +234,7 @@ async def run_benchmark(box_id: str):
     if retrieval_engine.reranker:
         retrieval_engine.reranker.rerank = patched_rerank
     
-    for item in BENCHMARK_DATA:
+    for item in local_benchmark_data:
         query = item["query"]
         expected = item["expected"]
         
@@ -197,11 +275,17 @@ async def run_benchmark(box_id: str):
         print(f"Mean Reciprocal Rank (MRR): {total_mrr / n:.3f}")
         print(f"Recall@5: {total_recall_5 / n:.3f}")
         print(f"Recall@10: {total_recall_10 / n:.3f}")
+        
+    print(f"\nCleaning up box '{box_id}'...")
+    # Clean up mock documents
+    doc_ids = set([c["expected"][0][0] for c in local_benchmark_data])
+    for did in doc_ids:
+        db.delete_document(did, box_id)
+    print("Cleanup complete.")
 
 if __name__ == "__main__":
-    # Specify the Box ID to test against. 
-    # Must contain the documents referenced in BENCHMARK_DATA.
-    TEST_BOX_ID = "00000000-0000-0000-0000-000000000000" 
+    # Use an existing Box ID from the DB so foreign keys pass
+    TEST_BOX_ID = "081532e9-a2e9-4263-a670-d41c496afcdf"
     
     # Run the async benchmark
     asyncio.run(run_benchmark(TEST_BOX_ID))

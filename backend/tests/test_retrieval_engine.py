@@ -99,3 +99,39 @@ def test_deduplication_same_document_same_chunk(retrieval_engine):
     assert len(results) == 1
     # Should keep the higher score (0.9)
     assert results[0]["rrf_score"] == 0.9
+
+def test_deduplication_different_document_same_prefix(retrieval_engine):
+    """
+    Test that two entirely different documents that happen to have identical chunks 
+    (e.g., standard standard disclaimers, company addresses) are NOT deduplicated.
+    They should both be returned because they are distinct source chunks.
+    """
+    retrieval_engine.embedder.embed_text.return_value = [[0.1, 0.2]]
+    
+    docs_returned = [
+        {
+            "document_id": "doc-1",
+            "chunk_index": 0,
+            "content": "CONFIDENTIAL: Do not distribute.",
+            "rrf_score": 0.9,
+        },
+        {
+            "document_id": "doc-2",  # Different document!
+            "chunk_index": 0,
+            "content": "CONFIDENTIAL: Do not distribute.",  # Identical content!
+            "rrf_score": 0.9,
+        }
+    ]
+    
+    retrieval_engine.db.search_similar.return_value = docs_returned
+    
+    results = retrieval_engine._multi_query_search(
+        queries=["test query"],
+        original_query="test query",
+        box_id="box-123"
+    )
+    
+    # Both should be preserved because document_id differs.
+    assert len(results) == 2
+    assert results[0]["document_id"] == "doc-1"
+    assert results[1]["document_id"] == "doc-2"
