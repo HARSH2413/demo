@@ -39,7 +39,7 @@ def test_process_file_background_success(ingestion_service, tmp_path):
     # Assert file cleanup
     assert not test_file.exists()
 
-def test_process_file_background_partial_failure_preserves_chunks(ingestion_service, tmp_path):
+def test_process_file_background_partial_failure_cleans_up(ingestion_service, tmp_path):
     test_file = tmp_path / "test.txt"
     test_file.write_text("dummy text")
     
@@ -59,8 +59,8 @@ def test_process_file_background_partial_failure_preserves_chunks(ingestion_serv
         
     assert "failed batches" in str(exc_info.value)
     
-    # Assert partial chunks cleanup was NOT called (we preserve successful/other chunks)
-    assert not ingestion_service.db.delete_chunks_by_document.called
+    # Assert partial chunks cleanup WAS called (we no longer preserve chunks)
+    assert ingestion_service.db.delete_chunks_by_document.called
     
     # Ensure document status was NOT updated to 'completed'
     assert not ingestion_service.db.update_document_status.called

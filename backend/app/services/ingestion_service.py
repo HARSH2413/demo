@@ -87,11 +87,8 @@ class IngestionService:
             # Successfully completed ingestion
             self.db.update_document_status(document_id, "completed")
 
-        except PartialIngestionError as e:
-            logger.warning(f"Partial ingestion for '{filename}': {e}")
-            raise e
         except Exception as e:
-            logger.error(f"Failed to process '{filename}': {e}")
+            logger.error(f"Ingestion failed for '{filename}': {e}")
             try:
                 logger.warning(f"Cleaning up partial chunks for failed document {document_id}")
                 self.db.delete_chunks_by_document(document_id)
@@ -198,6 +195,9 @@ class IngestionService:
                 filename=filename, box_id=box_id, file_type=file_type, document_id=document_id
             )
 
+        if total_chunks_saved == 0 and failed_batches == 0:
+            raise ValueError("No extractable text was found in this PDF. The document may be scanned/image-only and requires OCR. (OCR can be introduced as a future ingestion capability.)")
+
         if failed_batches > 0:
             logger.warning(f"Completed '{filename}' with {failed_batches} failed batches | {total_chunks_saved} chunks")
             raise PartialIngestionError(f"Completed with {failed_batches} failed batches | {total_chunks_saved} chunks saved")
@@ -210,7 +210,7 @@ class IngestionService:
         logger.info(f"Extracted text from '{filename}' ({len(raw_text)} chars)")
 
         if not raw_text.strip():
-            raise ValueError(f"No readable text was found in '{filename}'")
+            raise ValueError("No extractable text was found in this document. The document may be scanned/image-only and requires OCR. (OCR can be introduced as a future ingestion capability.)")
 
         chunks = self.text_splitter.split_text(raw_text)
         total_chunks = len(chunks)
@@ -290,8 +290,7 @@ class IngestionService:
         filename_lower = filename.lower()
 
         if filename_lower.endswith(".docx"):
-            doc_file = docx.Document(file_path)
-            return "\n".join([paragraph.text for paragraph in doc_file.paragraphs])
+            return self._extract_docx(file_path)
 
         elif filename_lower.endswith(".txt"):
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
@@ -305,6 +304,47 @@ class IngestionService:
 
         else:
             raise ValueError(f"Unsupported file type: {filename}")
+
+    def _extract_docx(self, file_path: str) -> str:
+        """
+        Extracts structured text from a DOCX file, preserving headings, paragraphs, and tables.
+        """
+        try:
+            import docx
+            from docx.oxml.table import CT_Tbl
+            from docx.oxml.text.paragraph import CT_P
+            from docx.table import Table
+            from docx.text.paragraph import Paragraph
+
+            doc_file = docx.Document(file_path)
+            content = []
+
+            for child in doc_file.element.body:
+                if isinstance(child, CT_P):
+                    paragraph = Paragraph(child, doc_file)
+                    if paragraph.text.strip():
+                        style_name = paragraph.style.name if paragraph.style else ""
+                        if style_name.startswith("Heading"):
+                            try:
+                                level = int(style_name.split()[-1])
+                                prefix = "#" * level
+                                content.append(f"{prefix} {paragraph.text.strip()}")
+                            except ValueError:
+                                content.append(f"## {paragraph.text.strip()}")
+                        else:
+                            content.append(paragraph.text.strip())
+                elif isinstance(child, CT_Tbl):
+                    table = Table(child, doc_file)
+                    content.append("[TABLE]")
+                    for row in table.rows:
+                        row_text = " | ".join(cell.text.strip().replace("\n", " ") for cell in row.cells if cell.text.strip())
+                        if row_text:
+                            content.append(row_text)
+
+            return "\n\n".join(content)
+        except Exception as e:
+            logger.error(f"DOCX extraction failed: {e}")
+            raise
 
     def _extract_csv(self, file_path: str) -> str:
         """
