@@ -188,19 +188,17 @@ class SupabaseAdapter(IVectorStore):
             .order("created_at", desc=True)
             .execute()
         )
-        documents: Dict[str, Dict[str, Any]] = {}
+        documents = []
         for row in response.data:
-            filename = row["filename"]
-            if filename not in documents:
-                documents[filename] = {
-                    "id": row.get("id"),
-                    "filename": filename,
-                    "file_hash": row.get("file_hash"),
-                    "created_at": row.get("created_at"),
-                    "status": row.get("status", "completed"), # Fallback to completed for older docs
-                    "error_message": row.get("error_message"),
-                }
-        return list(documents.values())
+            documents.append({
+                "id": row.get("id"),
+                "filename": row.get("filename"),
+                "file_hash": row.get("file_hash"),
+                "created_at": row.get("created_at"),
+                "status": row.get("status", "completed"), # Fallback to completed for older docs
+                "error_message": row.get("error_message"),
+            })
+        return documents
 
     # ── Chat Session Operations ──
 
