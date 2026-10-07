@@ -78,6 +78,7 @@ class EnhancedChatResponse(BaseModel):
     key_takeaways: list[str] = []
     related_questions: list[str] = []
     citations: list[Citation] = []
+    closest_matches: list[Citation] = []
     session_id: str
     confidence: str
 

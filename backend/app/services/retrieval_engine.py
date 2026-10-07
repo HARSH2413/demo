@@ -27,7 +27,6 @@ class RetrievalEngine:
 
     def retrieve_documents(self, search_query: str, box_id: str) -> List[Dict[str, Any]]:
         """Runs a single query dense + lexical search, merges with RRF, and reranks."""
-        # Fast path cache
         cached = self.cache.get_query_result(search_query, box_id)
         if cached is not None:
             logger.info("Cache hit for query results")
@@ -46,29 +45,40 @@ class RetrievalEngine:
         return docs
 
     def retrieve_documents_multi(self, queries: List[str], box_id: str, reranker_query: str) -> List[Dict[str, Any]]:
-        """Runs multiple queries (for rescue pass), merges all with RRF, and reranks using reranker_query."""
-        all_merged = {}
+        """Runs multiple queries (for rescue pass), merges all with global RRF, and reranks using reranker_query."""
+        self.lexical_store.ensure_box_index(box_id, self.db)
         
+        all_dense = {}
         for q in queries:
-            docs = self._hybrid_search(q, box_id, self.retrieval_top_k)
-            for d in docs:
-                key = (d.get("document_id"), d.get("chunk_index"))
-                if key not in all_merged:
-                    all_merged[key] = d
-                else:
-                    # Accumulate RRF score
-                    all_merged[key]["rrf_score"] = (all_merged[key].get("rrf_score", 0.0) + d.get("rrf_score", 0.0))
-                    # Keep best embedding/lexical score
-                    e1 = all_merged[key].get("embedding_score", 0.0)
-                    e2 = d.get("embedding_score", 0.0)
-                    all_merged[key]["embedding_score"] = max(e1 if e1 is not None else 0.0, e2 if e2 is not None else 0.0)
-                    
-                    l1 = all_merged[key].get("lexical_score", 0.0)
-                    l2 = d.get("lexical_score", 0.0)
-                    all_merged[key]["lexical_score"] = max(l1 if l1 is not None else 0.0, l2 if l2 is not None else 0.0)
-                    
-        # Sort by accumulated RRF
-        merged_list = sorted(all_merged.values(), key=lambda x: x.get("rrf_score", 0.0), reverse=True)
+            try:
+                query_vector = self.embedder.embed_text([q])[0]
+                dense_results = self.db.search_dense(query_vector=query_vector, box_id=box_id, limit=self.retrieval_top_k)
+                for d in dense_results:
+                    key = (d.get("document_id"), d.get("chunk_index"))
+                    # Deduplicate: keep the highest dense score across queries
+                    if key not in all_dense or d.get("embedding_score", 0.0) > all_dense[key].get("embedding_score", 0.0):
+                        all_dense[key] = d
+            except Exception as e:
+                logger.error(f"Multi dense search failed for query '{q}': {e}")
+                
+        all_lexical = {}
+        for q in queries:
+            try:
+                lexical_query = self._expand_lexical_variants(q)
+                lexical_results = self.lexical_store.search(query=lexical_query, box_id=box_id, limit=self.retrieval_top_k)
+                for d in lexical_results:
+                    key = (d.get("document_id"), d.get("chunk_index"))
+                    # Deduplicate: keep the highest lexical score across queries
+                    if key not in all_lexical or d.get("lexical_score", 0.0) > all_lexical[key].get("lexical_score", 0.0):
+                        all_lexical[key] = d
+            except Exception as e:
+                logger.error(f"Multi lexical search failed for query '{q}': {e}")
+                
+        # Sort globally by their respective raw scores before RRF
+        global_dense_sorted = sorted(all_dense.values(), key=lambda x: x.get("embedding_score", 0.0), reverse=True)
+        global_lexical_sorted = sorted(all_lexical.values(), key=lambda x: x.get("lexical_score", 0.0), reverse=True)
+        
+        merged_list = self._rrf_merge(global_dense_sorted, global_lexical_sorted, self.retrieval_top_k)
         
         if merged_list and self.reranker:
             try:
@@ -102,6 +112,9 @@ class RetrievalEngine:
         scores = {}
         docs = {}
         
+        # We need a stable tiebreaker, because ranks shouldn't be arbitrary if scores are identical.
+        # But python's stable sort is enough if we just enumerate after sorting.
+        
         for rank, doc in enumerate(dense):
             key = (doc.get("document_id"), doc.get("chunk_index"))
             scores[key] = scores.get(key, 0.0) + 1.0 / (self.rrf_k + rank + 1)
@@ -119,7 +132,14 @@ class RetrievalEngine:
         for key in docs:
             docs[key]["rrf_score"] = scores[key]
             
-        sorted_docs = sorted(docs.values(), key=lambda x: x["rrf_score"], reverse=True)
+        # Tie-breaker for deterministic tests: sort by score desc, then by document_id asc, chunk_index asc
+        sorted_docs = sorted(docs.values(), key=lambda x: (
+            x["rrf_score"],
+            x.get("embedding_score", 0.0),
+            -ord(x.get("document_id", "z")[0]),
+            -x.get("chunk_index", 0)
+        ), reverse=True)
+        
         return sorted_docs[:limit]
 
     def _expand_lexical_variants(self, text: str) -> str:

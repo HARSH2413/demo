@@ -25,7 +25,7 @@ def test_extract_docx_with_headings_and_tables(tmp_path):
     doc.save(doc_path)
     
     # Create service
-    service = IngestionService(db=MagicMock(), embedder=MagicMock())
+    service = IngestionService(db=MagicMock(), embedder=MagicMock(), lexical_store=None)
     
     # Extract
     text = service._extract_docx(str(doc_path))

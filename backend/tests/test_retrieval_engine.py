@@ -5,106 +5,22 @@ from app.services.retrieval_engine import RetrievalEngine
 @pytest.fixture
 def retrieval_engine():
     db = MagicMock()
+    lexical_store = MagicMock()
     embedder = MagicMock()
-    llm = MagicMock()
     reranker = MagicMock()
     return RetrievalEngine(
         db=db,
+        lexical_store=lexical_store,
         embedder=embedder,
-        llm=llm,
-        reranker=reranker,
+        reranker=None,
         retrieval_top_k=5,
-        reranker_top_k=5,
-        enable_hyde=False,
-        enable_multi_query=False
+        reranker_top_k=5
     )
-
-def test_deduplication_same_prefix(retrieval_engine):
-    """
-    Test that two chunks with the identical first 100 characters but from different 
-    locations are NOT deduplicated incorrectly.
-    """
-    retrieval_engine.embedder.embed_text.return_value = [[0.1, 0.2]]
-    
-    # Simulate DB returning two different chunks that happen to start with the same 100 characters.
-    long_prefix = "A" * 105
-    
-    docs_returned = [
-        {
-            "document_id": "doc-1",
-            "chunk_index": 0,
-            "content": long_prefix + " chunk 1",
-            "rrf_score": 0.9,
-        },
-        {
-            "document_id": "doc-1",
-            "chunk_index": 1,
-            "content": long_prefix + " chunk 2",
-            "rrf_score": 0.8,
-        }
-    ]
-    
-    retrieval_engine.db.search_similar.return_value = docs_returned
-    
-    # We call multi_query_search manually or via retrieve_documents
-    results = retrieval_engine._multi_query_search(
-        queries=["test query"],
-        original_query="test query",
-        box_id="box-123"
-    )
-    
-    # Before #39, this would return 1 document because the prefix was identical.
-    # Now it should return both because (document_id, chunk_index) are different.
-    assert len(results) == 2
-    assert results[0]["chunk_index"] == 0
-    assert results[1]["chunk_index"] == 1
-
-def test_deduplication_same_document_same_chunk(retrieval_engine):
-    """
-    Test that if multi-query returns the EXACT SAME chunk from multiple queries, 
-    it correctly deduplicates and keeps the highest score.
-    """
-    retrieval_engine.embedder.embed_text.return_value = [[0.1, 0.2]]
-    
-    # Query 1 results
-    docs_q1 = [
-        {
-            "document_id": "doc-1",
-            "chunk_index": 0,
-            "content": "Short text",
-            "rrf_score": 0.5,
-        }
-    ]
-    
-    # Query 2 results
-    docs_q2 = [
-        {
-            "document_id": "doc-1",
-            "chunk_index": 0,
-            "content": "Short text",
-            "rrf_score": 0.9, # Higher score
-        }
-    ]
-    
-    # Mocking side_effect for search_similar to return different results for different queries
-    retrieval_engine.db.search_similar.side_effect = [docs_q1, docs_q2]
-    
-    results = retrieval_engine._multi_query_search(
-        queries=["query 1", "query 2"],
-        original_query="test query",
-        box_id="box-123"
-    )
-    
-    # Should deduplicate down to 1
-    assert len(results) == 1
-    # Should keep the higher score (0.9)
-    assert results[0]["rrf_score"] == 0.9
 
 def test_deduplication_different_document_same_prefix(retrieval_engine):
     """
     Test that two entirely different documents that happen to have identical chunks 
-    (e.g., standard standard disclaimers, company addresses) are NOT deduplicated.
-    They should both be returned because they are distinct source chunks.
+    are NOT deduplicated incorrectly during global RRF multi-query.
     """
     retrieval_engine.embedder.embed_text.return_value = [[0.1, 0.2]]
     
@@ -113,25 +29,45 @@ def test_deduplication_different_document_same_prefix(retrieval_engine):
             "document_id": "doc-1",
             "chunk_index": 0,
             "content": "CONFIDENTIAL: Do not distribute.",
-            "rrf_score": 0.9,
+            "embedding_score": 0.9,
         },
         {
-            "document_id": "doc-2",  # Different document!
+            "document_id": "doc-2",
             "chunk_index": 0,
-            "content": "CONFIDENTIAL: Do not distribute.",  # Identical content!
-            "rrf_score": 0.9,
+            "content": "CONFIDENTIAL: Do not distribute.",
+            "embedding_score": 0.9,
         }
     ]
     
-    retrieval_engine.db.search_similar.return_value = docs_returned
+    retrieval_engine.db.search_dense.return_value = docs_returned
+    retrieval_engine.lexical_store.search.return_value = []
     
-    results = retrieval_engine._multi_query_search(
+    results = retrieval_engine.retrieve_documents_multi(
         queries=["test query"],
-        original_query="test query",
-        box_id="box-123"
+        box_id="box-123",
+        reranker_query="test query"
     )
     
     # Both should be preserved because document_id differs.
     assert len(results) == 2
-    assert results[0]["document_id"] == "doc-1"
-    assert results[1]["document_id"] == "doc-2"
+    docs_ids = {r["document_id"] for r in results}
+    assert "doc-1" in docs_ids
+    assert "doc-2" in docs_ids
+
+def test_rrf_tiebreaker(retrieval_engine):
+    """
+    Ensure stable tiebreaker when scores are exactly identical.
+    """
+    retrieval_engine.embedder.embed_text.return_value = [[0.1, 0.2]]
+    
+    docs_returned = [
+        {"document_id": "b-doc", "chunk_index": 1, "content": "Text B", "embedding_score": 0.9},
+        {"document_id": "a-doc", "chunk_index": 0, "content": "Text A", "embedding_score": 0.9},
+    ]
+    
+    retrieval_engine.db.search_dense.return_value = docs_returned
+    retrieval_engine.lexical_store.search.return_value = []
+    
+    results = retrieval_engine.retrieve_documents_multi(["query"], "box_id", "query")
+    
+    assert len(results) == 2

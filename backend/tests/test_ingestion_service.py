@@ -8,7 +8,7 @@ from app.api.upload import _process_upload_safely
 def ingestion_service():
     db_mock = MagicMock()
     embedder_mock = MagicMock()
-    service = IngestionService(db=db_mock, embedder=embedder_mock)
+    service = IngestionService(db=db_mock, embedder=embedder_mock, lexical_store=MagicMock())
     # mock split_text so we don't need real text splitting
     service.text_splitter = MagicMock()
     service.text_splitter.split_text.return_value = ["chunk1", "chunk2"]

@@ -11,7 +11,7 @@ def test_allowed_extensions_consistency():
     assert ALLOWED_EXTENSIONS == valid_exts
 
 def test_ingestion_service_rejects_xls():
-    service = IngestionService(db=None, embedder=None)
+    service = IngestionService(db=None, embedder=None, lexical_store=None)
     
     with pytest.raises(ValueError, match="Unsupported file type"):
         service._extract_text_from_disk("dummy.xls", "dummy.xls")
