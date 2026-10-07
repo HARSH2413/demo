@@ -150,8 +150,12 @@ class IngestionService:
                     max_retries = 3
                     for attempt in range(max_retries):
                         try:
+                            headers = [
+                                f"[Document: {filename} | Type: {file_type} | Pages {page_start+1}-{page_end} | Chunk {i+j+1}]"
+                                for j in range(len(embed_batch))
+                            ]
                             contextual_batch = [
-                                f"[Document: {filename} | Type: {file_type} | Pages {page_start+1}-{page_end} | Chunk {i+j+1}]\n\n{chunk}"
+                                f"{headers[j]}\n\n{chunk}"
                                 for j, chunk in enumerate(embed_batch)
                             ]
                             embeddings = self.embedder.embed_text(contextual_batch)
@@ -165,7 +169,10 @@ class IngestionService:
                                     "chunk_index": global_chunk_index + j,
                                     "page_start": page_start + 1,
                                     "page_end": page_end,
-                                    "metadata": {"type": file_type}
+                                    "metadata": {
+                                        "type": file_type,
+                                        "context_header": headers[j]
+                                    }
                                 }
                                 for j, chunk in enumerate(embed_batch)
                             ]
@@ -234,8 +241,12 @@ class IngestionService:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    headers = [
+                        f"[Document: {filename} | Type: {file_type} | Chunk {i + j + 1}/{total_chunks}]"
+                        for j in range(len(batch_chunks))
+                    ]
                     contextual_batch = [
-                        f"[Document: {filename} | Type: {file_type} | Chunk {i + j + 1}/{total_chunks}]\n\n{chunk}"
+                        f"{headers[j]}\n\n{chunk}"
                         for j, chunk in enumerate(batch_chunks)
                     ]
 
@@ -248,7 +259,10 @@ class IngestionService:
                             "content": chunk,
                             "embedding": embeddings[j],
                             "chunk_index": global_chunk_index + j,
-                            "metadata": {"type": file_type}
+                            "metadata": {
+                                "type": file_type,
+                                "context_header": headers[j]
+                            }
                         }
                         for j, chunk in enumerate(batch_chunks)
                     ]

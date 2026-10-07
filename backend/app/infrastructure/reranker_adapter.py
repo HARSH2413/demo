@@ -30,7 +30,15 @@ class FastEmbedRerankerAdapter(IReranker):
             return []
 
         # Extract text content for scoring
-        passages = [doc.get("content", "") for doc in documents]
+        passages = []
+        for doc in documents:
+            meta = doc.get("metadata") or {}
+            context_header = meta.get("context_header", "")
+            content = doc.get("content", "")
+            if context_header:
+                passages.append(f"{context_header}\n\n{content}")
+            else:
+                passages.append(content)
 
         # Score all (query, passage) pairs
         scores = list(self.model.rerank(query, passages))

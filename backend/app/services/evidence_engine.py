@@ -173,10 +173,15 @@ class EvidenceEngine:
             neighbor_label = " [+ neighboring context]" if doc.get("has_neighbor_context") else ""
             
             evidence_id = doc.get("evidence_id", "[E?]")
+            
+            meta = doc.get("metadata") or {}
+            context_header = meta.get("context_header", f"[Document: {doc.get('filename')}]")
+            
             context_parts.append(
                 f"--- EVIDENCE {evidence_id} ---\n"
-                f"Source: {doc['filename']}{score_label}{neighbor_label}\n"
-                f"Content: {doc['content']}\n"
+                f"Source: {doc.get('filename')}{score_label}{neighbor_label}\n"
+                f"Context: {context_header}\n"
+                f"Content: {doc.get('content')}\n"
                 f"----------------------"
             )
         return "\n\n".join(context_parts)

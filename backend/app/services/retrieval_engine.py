@@ -120,6 +120,27 @@ class RetrievalEngine:
 
         return queries
 
+    def _expand_lexical_variants(self, text: str) -> str:
+        variants_map = {
+            "gst": "Goods and Services Tax",
+            "pf": "Provident Fund EPF",
+            "epf": "Provident Fund PF",
+            "pto": "Paid Time Off",
+            "hr": "Human Resources",
+            "nda": "Non-Disclosure Agreement",
+            "kpi": "Key Performance Indicator",
+            "roi": "Return on Investment",
+        }
+        words = text.split()
+        expanded_words = []
+        for word in words:
+            clean_word = word.lower().strip(",.?!()[]{}\"'")
+            expanded_words.append(word)
+            if clean_word in variants_map:
+                expanded_words.append(variants_map[clean_word])
+        
+        return " ".join(expanded_words)
+
     def _multi_query_search(
         self,
         queries: list[str],
@@ -129,13 +150,14 @@ class RetrievalEngine:
     ) -> list[dict]:
         all_docs = {}
         search_limit = retrieval_limit or self.retrieval_top_k
+        lexical_query = self._expand_lexical_variants(original_query)
 
         for query in queries:
             try:
                 query_vector = self.embedder.embed_text([query])[0]
                 docs = self.db.search_similar(
                     query_vector=query_vector,
-                    query_text=original_query,
+                    query_text=lexical_query,
                     box_id=box_id,
                     limit=search_limit,
                 )
