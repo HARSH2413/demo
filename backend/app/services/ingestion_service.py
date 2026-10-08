@@ -22,9 +22,15 @@ import fitz  # PyMuPDF
 class PartialIngestionError(Exception):
     """Raised when one or more batches fail during ingestion, but some chunks succeeded."""
     pass
+
+class DocumentDeletedError(Exception):
+    """Raised when a document is deleted by the user while ingestion is still processing."""
+    pass
+
 import docx
 import gc
 import os
+import time
 from typing import List, Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.interfaces.vector_store import IVectorStore
@@ -91,6 +97,9 @@ class IngestionService:
             self.db.update_document_status(document_id, "completed")
             self.lexical_store.invalidate_box(box_id)
 
+        except DocumentDeletedError as e:
+            logger.warning(f"Ingestion aborted for '{filename}': Document was deleted by the user.")
+            # No cleanup needed in DB since the cascade delete handles it
         except Exception as e:
             logger.error(f"Ingestion failed for '{filename}': {e}")
             try:
@@ -109,6 +118,8 @@ class IngestionService:
 
     def _process_pdf_streaming(self, file_path: str, filename: str, file_hash: str, box_id: str, document_id: str, file_type: str = "PDF"):
         """Memory-safe PDF processing — pages in batches with block-based extraction."""
+        start_total = time.perf_counter()
+        
         with fitz.open(file_path) as doc:
             total_pages = doc.page_count
             logger.info(f"Processing PDF '{filename}' | {total_pages} pages | batch size {PDF_PAGE_BATCH_SIZE}")
@@ -117,6 +128,14 @@ class IngestionService:
             failed_batches = 0
             all_text_for_summary = []  # Collect first pages for summary generation
             global_chunk_index = 1
+            
+            # Metrics
+            t_extract = 0.0
+            t_split = 0.0
+            t_embed = 0.0
+            t_db = 0.0
+            t_summary = 0.0
+            total_embed_batches = 0
             
             # Extract PDF Table of Contents for deterministic section titles
             toc = doc.get_toc()
@@ -135,6 +154,7 @@ class IngestionService:
             for page_start in range(0, total_pages, PDF_PAGE_BATCH_SIZE):
                 page_end = min(page_start + PDF_PAGE_BATCH_SIZE, total_pages)
     
+                t0 = time.perf_counter()
                 page_texts = []
                 for page_num in range(page_start, page_end):
                     page = doc.load_page(page_num)
@@ -146,6 +166,7 @@ class IngestionService:
                     page_texts.append(page_text)
     
                 batch_text = "\n".join(page_texts)
+                t_extract += time.perf_counter() - t0
     
                 # Collect text from first 3 pages for summary
                 if page_start == 0:
@@ -156,7 +177,9 @@ class IngestionService:
                 if not batch_text.strip():
                     continue
     
+                t0 = time.perf_counter()
                 chunks = self.text_splitter.split_text(batch_text)
+                t_split += time.perf_counter() - t0
                 del batch_text
     
                 if not chunks:
@@ -176,7 +199,9 @@ class IngestionService:
                                 f"{headers[j]}\n\n{chunk}"
                                 for j, chunk in enumerate(embed_batch)
                             ]
+                            t0 = time.perf_counter()
                             embeddings = self.embedder.embed_text(contextual_batch)
+                            t_embed += time.perf_counter() - t0
                             del contextual_batch
     
                             records = [
@@ -197,11 +222,19 @@ class IngestionService:
                                 for j, chunk in enumerate(embed_batch)
                             ]
     
+                            t0 = time.perf_counter()
                             self.db.save_document_chunks(records)
+                            t_db += time.perf_counter() - t0
+                            
                             total_chunks_saved += len(embed_batch)
+                            total_embed_batches += 1
                             del records, embeddings
                             break
                         except Exception as e:
+                            # Check if the document was deleted by the user (foreign key violation)
+                            if "23503" in str(e) or "foreign key" in str(e).lower():
+                                raise DocumentDeletedError(f"Document {document_id} no longer exists.")
+                                
                             if attempt == max_retries - 1:
                                 failed_batches += 1
                                 logger.error(f"Failed batch for pages {page_start+1}-{page_end}: {e}")
@@ -217,10 +250,21 @@ class IngestionService:
 
         # Generate and store document summary as chunk 0
         if all_text_for_summary:
+            t0 = time.perf_counter()
             self._generate_document_summary(
                 text_preview="\n".join(all_text_for_summary),
                 filename=filename, box_id=box_id, file_type=file_type, document_id=document_id
             )
+            t_summary += time.perf_counter() - t0
+            
+        t_total = time.perf_counter() - start_total
+        avg_batch = total_chunks_saved / max(1, total_embed_batches)
+        
+        logger.info(
+            f"INGESTION AUDIT [{filename}]: "
+            f"Pages={total_pages} | Chunks={total_chunks_saved} | EmbedBatches={total_embed_batches} | AvgBatch={avg_batch:.1f} || "
+            f"Time: Total={t_total:.2f}s | Extract={t_extract:.2f}s | Split={t_split:.2f}s | Embed={t_embed:.2f}s | DB={t_db:.2f}s | Summary={t_summary:.2f}s"
+        )
 
         if total_chunks_saved == 0 and failed_batches == 0:
             raise ValueError("No extractable text was found in this PDF. The document may be scanned/image-only and requires OCR. (OCR can be introduced as a future ingestion capability.)")
@@ -233,21 +277,31 @@ class IngestionService:
 
     def _process_small_file(self, file_path: str, filename: str, file_hash: str, box_id: str, document_id: str, file_type: str = "Document"):
         """Standard processing for DOCX, TXT, CSV, and XLSX files."""
+        start_total = time.perf_counter()
+        t_embed = 0.0
+        t_db = 0.0
+        
+        t0 = time.perf_counter()
         raw_text = self._extract_text_from_disk(file_path, filename)
+        t_extract = time.perf_counter() - t0
         logger.info(f"Extracted text from '{filename}' ({len(raw_text)} chars)")
 
         if not raw_text.strip():
             raise ValueError("No extractable text was found in this document. The document may be scanned/image-only and requires OCR. (OCR can be introduced as a future ingestion capability.)")
 
+        t0 = time.perf_counter()
         chunks = self.text_splitter.split_text(raw_text)
+        t_split = time.perf_counter() - t0
         total_chunks = len(chunks)
         logger.info(f"Split '{filename}' into {total_chunks} chunks")
 
         # Generate document summary before deleting raw_text
+        t0 = time.perf_counter()
         self._generate_document_summary(
             text_preview=raw_text[:3000],
             filename=filename, box_id=box_id, file_type=file_type, document_id=document_id
         )
+        t_summary = time.perf_counter() - t0
         del raw_text
 
         total_batches = (total_chunks + self.batch_size - 1) // self.batch_size
@@ -287,7 +341,9 @@ class IngestionService:
                         for j, item in enumerate(batch_data)
                     ]
 
+                    t0 = time.perf_counter()
                     embeddings = self.embedder.embed_text(contextual_batch)
+                    t_embed += time.perf_counter() - t0
                     del contextual_batch
 
                     records = [
@@ -306,11 +362,17 @@ class IngestionService:
                         for j, item in enumerate(batch_data)
                     ]
 
+                    t0 = time.perf_counter()
                     self.db.save_document_chunks(records)
+                    t_db += time.perf_counter() - t0
                     del records, embeddings
                     logger.info(f"Processed batch {batch_num}/{total_batches} for '{filename}'")
                     break
                 except Exception as e:
+                    # Check if the document was deleted by the user (foreign key violation)
+                    if "23503" in str(e) or "foreign key" in str(e).lower():
+                        raise DocumentDeletedError(f"Document {document_id} no longer exists.")
+
                     if attempt == max_retries - 1:
                         failed_batches += 1
                         logger.error(f"Failed batch {batch_num}/{total_batches} for '{filename}': {e}")
@@ -318,6 +380,15 @@ class IngestionService:
                         logger.warning(f"Retrying batch {batch_num}/{total_batches} for '{filename}' (attempt {attempt + 1})")
 
             global_chunk_index += len(batch_data)
+
+        t_total = time.perf_counter() - start_total
+        avg_batch = total_chunks / max(1, total_batches)
+
+        logger.info(
+            f"INGESTION AUDIT [{filename}]: "
+            f"Pages=N/A | Chunks={total_chunks} | EmbedBatches={total_batches} | AvgBatch={avg_batch:.1f} || "
+            f"Time: Total={t_total:.2f}s | Extract={t_extract:.2f}s | Split={t_split:.2f}s | Embed={t_embed:.2f}s | DB={t_db:.2f}s | Summary={t_summary:.2f}s"
+        )
 
         if failed_batches > 0:
             logger.warning(f"Completed '{filename}' with {failed_batches}/{total_batches} failed batches")

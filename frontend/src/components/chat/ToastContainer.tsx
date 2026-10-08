@@ -9,7 +9,7 @@ export interface Toast {
 
 export function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   return (
-    <div className="fixed top-6 right-6 z-50 space-y-3">
+    <div className="fixed top-6 right-6 z-[100] space-y-3">
       {toasts.map((toast) => (
         <div
           key={toast.id}

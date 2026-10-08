@@ -81,7 +81,7 @@ def get_ingestion_service() -> IngestionService:
         chunk_size=settings.CHUNK_SIZE,
         chunk_overlap=settings.CHUNK_OVERLAP,
         batch_size=settings.INGESTION_BATCH_SIZE,
-        llm=_get_llm_adapter(),  # For document summary generation
+        llm=None,  # Disabled: Do not use LLM for document summarization
     )
 
 def get_box_service() -> BoxService:

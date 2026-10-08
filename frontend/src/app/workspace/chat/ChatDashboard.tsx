@@ -236,10 +236,23 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
   const uploadFiles = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
     if (!files.length) return;
+    const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
     const supportedExtensions = new Set(['pdf', 'txt', 'docx', 'csv', 'xlsx']);
-    const validFiles = files.filter((file) => supportedExtensions.has(file.name.split('.').pop()?.toLowerCase() || ''));
-    if (validFiles.length !== files.length) showToast('Only PDF, DOCX, TXT, CSV, and XLSX files are supported.', 'warning');
-    if (!validFiles.length) return;
+    
+    const validFormatFiles = files.filter((file) => supportedExtensions.has(file.name.split('.').pop()?.toLowerCase() || ''));
+    if (validFormatFiles.length !== files.length) {
+      showToast('Only PDF, DOCX, TXT, CSV, and XLSX files are supported.', 'warning');
+    }
+
+    const validFiles = validFormatFiles.filter((file) => file.size <= MAX_SIZE);
+    if (validFiles.length !== validFormatFiles.length) {
+      showToast('One or more files exceed the 25 MB size limit.', 'error');
+    }
+    
+    if (!validFiles.length) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     setIsUploading(true);
 
@@ -281,9 +294,9 @@ export default function SecureBrainDashboard({ boxId, boxName }: { boxId: string
         setUploadFileItems(prev => prev.map((item, i) =>
           i === idx ? { ...item, status: 'ready' as const, progress: 100, statusMessage: data.message || 'Indexed and ready' } : item
         ));
-      } catch {
+      } catch (err: any) {
         setUploadFileItems(prev => prev.map((item, i) =>
-          i === idx ? { ...item, status: 'failed' as const, progress: 0, statusMessage: 'Processing failed' } : item
+          i === idx ? { ...item, status: 'failed' as const, progress: 0, statusMessage: err.message || 'Processing failed' } : item
         ));
         setDocuments((previous) => previous.map((document) => document.filename === file.name ? { ...document, status: 'failed' } : document));
       }

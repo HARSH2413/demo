@@ -178,7 +178,7 @@ export function KnowledgeBaseView({
                 <span>Drop files here to upload</span>
                 <span className="text-xs text-slate-500 font-normal hidden sm:inline">• Ready to chat in moments</span>
               </div>
-              <p className="text-xs text-slate-500">PDF, DOCX, TXT up to 50MB</p>
+              <p className="text-xs text-slate-500">PDF, DOCX, TXT, CSV, XLSX up to 25MB</p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
