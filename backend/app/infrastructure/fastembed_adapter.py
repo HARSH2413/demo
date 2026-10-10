@@ -10,7 +10,7 @@ from app.core.cache import global_embedding_cache
 
 
 class FastEmbedAdapter(IEmbedder):
-    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
+    def __init__(self, model_name: str = "BAAI/bge-base-en-v1.5"):
         self.model = TextEmbedding(model_name=model_name)
         self.cache = global_embedding_cache
         logger.info(f"FastEmbed adapter initialized | model={model_name}")

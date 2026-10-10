@@ -13,7 +13,7 @@ from app.infrastructure.reranker_adapter import FastEmbedRerankerAdapter
 from app.infrastructure.bm25s_adapter import BM25SAdapter
 from app.services.chat_service import ChatService
 from app.services.ingestion_service import IngestionService
-from app.services.query_rewriter import QueryRewriter
+
 from app.services.box_service import BoxService
 
 
@@ -57,7 +57,7 @@ def _get_lexical_adapter() -> BM25SAdapter:
 def get_chat_service() -> ChatService:
     """FastAPI will call this to get a fully configured ChatService."""
     llm = _get_llm_adapter()
-    query_rewriter = QueryRewriter(llm=llm) if settings.ENABLE_QUERY_REWRITE else None
+
 
     return ChatService(
         db=_get_db_adapter(),

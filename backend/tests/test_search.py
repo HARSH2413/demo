@@ -16,7 +16,7 @@ def test_search_dense_calls_rpc(supabase_adapter):
     supabase_adapter.client.rpc.return_value.execute.return_value = mock_response
 
     results = supabase_adapter.search_dense(
-        query_vector=[0.1]*1024,
+        query_vector=[0.1]*768,
         box_id="test-box-id",
         limit=5
     )
@@ -25,7 +25,7 @@ def test_search_dense_calls_rpc(supabase_adapter):
     supabase_adapter.client.rpc.assert_called_once_with(
         "match_documents_dense_box",
         {
-            "query_embedding": [0.1]*1024,
+            "query_embedding": [0.1]*768,
             "match_box_id": "test-box-id",
             "match_count": 5
         }

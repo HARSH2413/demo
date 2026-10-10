@@ -68,3 +68,28 @@ class FastEmbedRerankerAdapter(IReranker):
         )
 
         return scored_docs[:top_k]
+
+    def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
+        if not pairs:
+            return []
+            
+        # Batch score all pairs via underlying model
+        try:
+            raw_scores = list(self.model.model.rerank_pairs(pairs))
+        except AttributeError:
+            # Fallback if the internal API changes
+            raw_scores = []
+            for q, p in pairs:
+                res = list(self.model.rerank(q, [p]))
+                if res:
+                    s = res[0]
+                    raw_scores.append(s if isinstance(s, float) else float(getattr(s, 'score', s)))
+                else:
+                    raw_scores.append(0.0)
+                    
+        # Apply sigmoid normalization
+        scores = []
+        for raw_score in raw_scores:
+            scores.append(1.0 / (1.0 + math.exp(-raw_score)))
+            
+        return scores

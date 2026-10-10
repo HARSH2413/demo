@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # ── Model Configuration (swap via .env) ──
     LLM_MODEL_NAME: str = "llama-3.1-8b-instant"
-    EMBEDDING_MODEL_NAME: str = "BAAI/bge-large-en-v1.5"
+    EMBEDDING_MODEL_NAME: str = "BAAI/bge-base-en-v1.5"
     LLM_TEMPERATURE: float = 0.0
 
     # ── Resilience ──
@@ -46,14 +46,21 @@ class Settings(BaseSettings):
     # A question must meet this score before the assistant is allowed to answer.
     # We calibrate this slightly lower than MIN_RELEVANCE_SCORE so we don't accidentally block valid answers.
     ANSWER_MIN_RELEVANCE_SCORE: float = 0.12
+    
+    # ── Chat & Responses ──
+    FALLBACK_PHRASE: str = "I could not find the answer to this in the provided company documents."
     ENABLE_QUERY_REWRITE: bool = False  # LLM-based query rewriting for multi-turn
     ENABLE_HYDE: bool = False          # expensive; enable in .env when needed
     ENABLE_MULTI_QUERY: bool = False   # expensive; enable in .env when needed
-    ENABLE_NEIGHBOR_CONTEXT: bool = False  # extra DB calls; enable in .env when needed
+    ENABLE_NEIGHBOR_CONTEXT: bool = True  # sibling-only expansion for hierarchical chunks
+    ENABLE_RERANK_DEBUG_LOGGING: bool = False # Logs dropped chunks and raw scores per query
 
     # ── Ingestion ──
-    CHUNK_SIZE: int = 1000
-    CHUNK_OVERLAP: int = 300
+    # Character-based splitter settings.  1,400 chars is roughly 300-350
+    # English tokens; the 200-char overlap is intentionally much lower than
+    # the previous 30% overlap to reduce duplicate embeddings on CPU laptops.
+    CHUNK_SIZE: int = 1400
+    CHUNK_OVERLAP: int = 200
     INGESTION_BATCH_SIZE: int = 10     # keep small to avoid OOM with large embedding models
 
 
@@ -64,6 +71,10 @@ class Settings(BaseSettings):
     RELATED_QUESTIONS_COUNT: int = 3  # Number of related questions to generate
     KEY_TAKEAWAYS_COUNT: int = 3  # Number of key takeaways to extract
     ANSWER_DETAIL_LEVEL: str = "comprehensive"  # or "detailed", "standard"
+    
+    # ── Citation Firewall ──
+    CITATION_ENFORCEMENT_MODE: str = "soft"  # 'strict' or 'soft'
+    CITATION_SUPPORT_THRESHOLD: float = 0.3  # Cross-encoder threshold for sentence-level support
 
     class Config:
         env_file = ".env"

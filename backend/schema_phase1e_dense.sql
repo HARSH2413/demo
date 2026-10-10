@@ -3,9 +3,10 @@
 -- ==========================================
 
 DROP FUNCTION IF EXISTS public.match_documents_dense_box(vector(1024), uuid, int);
+DROP FUNCTION IF EXISTS public.match_documents_dense_box(vector(768), uuid, int);
 
 CREATE OR REPLACE FUNCTION public.match_documents_dense_box(
-    query_embedding vector(1024),
+    query_embedding vector(768),
     match_box_id uuid,
     match_count int DEFAULT 5
 )
@@ -46,5 +47,5 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.match_documents_dense_box(vector(1024), uuid, int) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.match_documents_dense_box(vector(1024), uuid, int) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.match_documents_dense_box(vector(768), uuid, int) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.match_documents_dense_box(vector(768), uuid, int) TO service_role;

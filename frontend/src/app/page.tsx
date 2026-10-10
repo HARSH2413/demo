@@ -83,7 +83,7 @@ export default function LandingPage() {
         <div className="mt-20 w-full animate-fade-in-up" style={{ animationDelay: '0.5s', opacity: 0 }} aria-hidden="true">
           <div className="relative rounded-2xl bg-white/50 border border-slate-200/80 p-2 md:p-4 shadow-2xl shadow-slate-200/50 overflow-hidden">
             <div className="bg-white rounded-xl border border-slate-200 flex flex-col md:flex-row h-auto md:h-[500px] overflow-hidden relative z-0 shadow-sm">
-              
+
               {/* Sidebar / Upload Demo */}
               <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50 p-4 md:p-6 flex flex-col gap-3 md:gap-4">
                 <div className="flex items-center justify-between mb-2 md:mb-4">

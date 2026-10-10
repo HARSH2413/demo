@@ -17,16 +17,21 @@ class RuleBasedQueryRouter:
         if len(clean_query.split()) <= 3:
             return {"route": "follow_up"}
             
-        # 2. Follow-up starters
-        starters = ["what about", "how about", "and what", "and ", "also "]
+        # 2. Follow-up conversational starters
+        starters = ["what about", "how about", "and what", "and ", "also ", "why ", "why?"]
         for s in starters:
             if clean_query.startswith(s):
                 return {"route": "follow_up"}
                 
-        # 3. Context-dependent pronouns
-        pronouns = ["it", "this", "that", "they", "them", "their", "his", "her", "those", "these", "he", "she"]
-        words = set(re.findall(r'\b\w+\b', clean_query))
+        # 3. Context-dependent pronouns (ignoring document references like 'this pdf')
+        doc_refs = ["this pdf", "this doc", "this document", "the pdf", "the document", "the file"]
+        has_doc_ref = any(d in clean_query for d in doc_refs)
         
+        pronouns = ["it", "they", "them", "their", "his", "her", "those", "these", "he", "she"]
+        if not has_doc_ref:
+            pronouns.extend(["this", "that"])
+            
+        words = set(re.findall(r'\b\w+\b', clean_query))
         if any(p in words for p in pronouns):
             return {"route": "follow_up"}
             

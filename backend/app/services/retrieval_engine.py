@@ -37,6 +37,12 @@ class RetrievalEngine:
         if docs and self.reranker:
             try:
                 docs = self.reranker.rerank(query=search_query, documents=docs, top_k=self.reranker_top_k)
+                
+                from app.core.config import settings
+                if settings.ENABLE_RERANK_DEBUG_LOGGING:
+                    logger.info(f"[RERANK DEBUG] Query: '{search_query}'")
+                    for i, d in enumerate(docs):
+                        logger.info(f"  [{i}] Score: {d.get('rerank_score', 0):.4f} | Chunk: {d.get('content', '')[:60]}...")
             except Exception as e:
                 logger.warning(f"Re-ranking failed: {e}")
                 docs = docs[:self.reranker_top_k]
@@ -83,6 +89,12 @@ class RetrievalEngine:
         if merged_list and self.reranker:
             try:
                 merged_list = self.reranker.rerank(query=reranker_query, documents=merged_list, top_k=self.reranker_top_k)
+                
+                from app.core.config import settings
+                if settings.ENABLE_RERANK_DEBUG_LOGGING:
+                    logger.info(f"[RERANK DEBUG MULTI] Reranker Query: '{reranker_query}'")
+                    for i, d in enumerate(merged_list):
+                        logger.info(f"  [{i}] Score: {d.get('rerank_score', 0):.4f} | Chunk: {d.get('content', '')[:60]}...")
             except Exception as e:
                 logger.warning(f"Re-ranking failed in multi: {e}")
                 merged_list = merged_list[:self.reranker_top_k]
@@ -143,7 +155,8 @@ class RetrievalEngine:
         return sorted_docs[:limit]
 
     def _expand_lexical_variants(self, text: str) -> str:
-        variants_map = {
+        from app.core.config import settings
+        variants_map = getattr(settings, "LEXICAL_VARIANTS_MAP", {
             "gst": "Goods and Services Tax",
             "pf": "Provident Fund EPF",
             "epf": "Provident Fund PF",
@@ -152,7 +165,7 @@ class RetrievalEngine:
             "nda": "Non-Disclosure Agreement",
             "kpi": "Key Performance Indicator",
             "roi": "Return on Investment",
-        }
+        })
         words = text.split()
         expanded_words = []
         for word in words:

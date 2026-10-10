@@ -24,6 +24,7 @@ class QueryExpansionService:
             "- No markdown blocks or extra text.\n"
             "- Keep queries concise and search-friendly.\n"
             "- Preserve exact dates, acronyms, and names.\n"
+            "- If the question introduces a specific new topic, subject, or article (e.g. Article 22, Section 54), focus purely on that new topic and DO NOT mix in previous unrelated topics from history.\n"
             "- Variants should genuinely differ in wording but mean the same thing.\n"
         )
         

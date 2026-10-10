@@ -27,10 +27,10 @@ class DocumentDeletedError(Exception):
     """Raised when a document is deleted by the user while ingestion is still processing."""
     pass
 
-import docx
 import gc
 import os
 import time
+import re
 from typing import List, Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.interfaces.vector_store import IVectorStore
@@ -38,9 +38,10 @@ from app.interfaces.lexical_store import ILexicalStore
 from app.interfaces.embedder import IEmbedder
 from app.interfaces.llm import ILLM
 from app.core.logger import logger
+from app.services.hierarchical_chunking import HierarchicalChunker
 
 # Number of PDF pages to process at a time (kept small for bge-large memory safety).
-PDF_PAGE_BATCH_SIZE = 10
+PDF_PAGE_BATCH_SIZE = 20
 
 
 class IngestionService:
@@ -59,6 +60,7 @@ class IngestionService:
         self.embedder = embedder
         self.batch_size = batch_size
         self.llm = llm  # Optional: used for document summary generation
+        self.hierarchical_chunker = HierarchicalChunker(chunk_size=chunk_size)
         # Heading-aware separators — respects document structure before fixed-size splits
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
@@ -72,6 +74,7 @@ class IngestionService:
                 ". ",          # Sentence boundary
                 " ",           # Word boundary (last resort)
             ],
+            add_start_index=True
         )
 
     def process_file_background(self, file_path: str, filename: str, file_hash: str, box_id: str, document_id: str):
@@ -142,30 +145,61 @@ class IngestionService:
             page_to_section = {}
             current_section = None
             if toc:
-                # toc format: [[lvl, title, page_num], ...]
-                toc_sorted = sorted(toc, key=lambda x: x[2])
-                toc_idx = 0
-                for p in range(1, total_pages + 1):
-                    while toc_idx < len(toc_sorted) and toc_sorted[toc_idx][2] <= p:
-                        current_section = toc_sorted[toc_idx][1]
-                        toc_idx += 1
-                    page_to_section[p] = current_section
+                for entry in toc:
+                    lvl, title, page_num = entry
+                    if page_num not in page_to_section:
+                        page_to_section[page_num] = title
     
             for page_start in range(0, total_pages, PDF_PAGE_BATCH_SIZE):
                 page_end = min(page_start + PDF_PAGE_BATCH_SIZE, total_pages)
     
                 t0 = time.perf_counter()
+                from app.utils.pdf_parser import sort_blocks_column_aware
+                
                 page_texts = []
                 for page_num in range(page_start, page_end):
+                    current_section = page_to_section.get(page_num + 1, current_section)
                     page = doc.load_page(page_num)
-                    # Use 'blocks' extraction to preserve document structure (headings, paragraphs)
                     blocks = page.get_text("blocks")
-                    # Sort blocks by vertical position (top to bottom), then horizontal
-                    blocks.sort(key=lambda b: (b[1], b[0]))
-                    page_text = "\n".join(b[4] for b in blocks if b[6] == 0)  # type 0 = text blocks
+                    blocks = sort_blocks_column_aware(blocks, page_rotation=getattr(page, 'rotation', 0))
+                    page_text = "\n".join(b[4] for b in blocks if len(b) >= 7 and b[6] == 0)
+                    
+                    # Normalize text: fold case, strip glyphs, collapse whitespace but preserve newlines
+                    page_text = page_text.lower()
+                    page_text = re.sub(r'[\u25a0-\u25ff\u2022\u202d\u202c]', '', page_text)
+                    page_text = re.sub(r'[ \t]+', ' ', page_text).strip()
+                    
+                    
+                    # Heuristic for section title if TOC is missing
+                    if not page_to_section.get(page_num + 1):
+                        for b in blocks:
+                            if len(b) >= 7 and b[6] == 0:
+                                line_text = b[4].strip()
+                                # Short, uppercase line or starts with numbering (e.g. "1. TOPIC")
+                                if 3 < len(line_text) < 60 and (line_text.isupper() or re.match(r'^\d+\.\s+[A-Z]', line_text)):
+                                    page_to_section[page_num + 1] = line_text
+                                    break
+                    current_section = page_to_section.get(page_num + 1, current_section)
+                    if current_section:
+                        page_to_section[page_num + 1] = current_section
+                                    
                     page_texts.append(page_text)
-    
-                batch_text = "\n".join(page_texts)
+                    
+                # Compute normalized offsets
+                batch_text = ""
+                page_offsets = [] # (start_idx, end_idx, actual_page_num)
+                current_idx = 0
+                for i, text in enumerate(page_texts):
+                    start_idx = current_idx
+                    if i > 0 and text:
+                        batch_text += " "
+                        start_idx += 1
+                        
+                    batch_text += text
+                    end_idx = start_idx + len(text)
+                    page_offsets.append((start_idx, end_idx, page_start + i + 1))
+                    current_idx = len(batch_text)
+
                 t_extract += time.perf_counter() - t0
     
                 # Collect text from first 3 pages for summary
@@ -177,27 +211,72 @@ class IngestionService:
                 if not batch_text.strip():
                     continue
     
-                t0 = time.perf_counter()
-                chunks = self.text_splitter.split_text(batch_text)
+                chunk_docs_raw = self.text_splitter.create_documents([batch_text])
+                
+                chunk_docs = self._merge_small_pdf_chunks(chunk_docs_raw, batch_text)
+                        
                 t_split += time.perf_counter() - t0
+                
+                chunks_info = []
+                last_successful_offset = 0
+                for c_doc in chunk_docs:
+                    c_text = c_doc.page_content
+                    
+                    # Robust recalculation for merged chunks
+                    c_start = c_doc.metadata.get("start_index", 0)
+                    actual_start = batch_text.find(c_text[:50], max(0, c_start - 500))
+                    if actual_start != -1:
+                        c_start = actual_start
+                        
+                    c_end = c_start + len(c_text)
+                    
+                    if batch_text[c_start:c_end] != c_text:
+                        logger.error("Offset mismatch in chunk! Text not found. Falling back to batch-level page mapping.")
+                        c_start = -1
+                                
+                    if c_start == -1:
+                        c_page_start = page_start + 1
+                        c_page_end = page_end
+                    else:
+                        last_successful_offset = c_end
+                        overlapping = [
+                            p_num for (p_start, p_end, p_num) in page_offsets
+                            if p_start <= c_end and p_end >= c_start
+                        ]
+                        if overlapping:
+                            c_page_start = min(overlapping)
+                            c_page_end = max(overlapping)
+                        else:
+                            c_page_start = page_start + 1
+                            c_page_end = page_end
+                            
+                    chunks_info.append({
+                        "text": c_text,
+                        "page_start": c_page_start,
+                        "page_end": c_page_end
+                    })
+                    
                 del batch_text
+                del chunk_docs
     
-                if not chunks:
+                if not chunks_info:
                     continue
     
-                for i in range(0, len(chunks), self.batch_size):
-                    embed_batch = chunks[i : i + self.batch_size]
+                for i in range(0, len(chunks_info), self.batch_size):
+                    embed_batch = chunks_info[i : i + self.batch_size]
     
                     max_retries = 3
                     for attempt in range(max_retries):
                         try:
-                            headers = [
-                                f"[Document: {filename} | Type: {file_type} | Pages {page_start+1}-{page_end} | Chunk {i+j+1}]"
-                                for j in range(len(embed_batch))
-                            ]
+                            headers = []
+                            for j, cinfo in enumerate(embed_batch):
+                                sec = page_to_section.get(cinfo['page_start']) or "Document"
+                                sec_str = f" | Section: {sec}" if (sec and sec.strip()) else ""
+                                headers.append(f"[Document: {filename} | Type: {file_type} | Pages {cinfo['page_start']}-{cinfo['page_end']}{sec_str} | Chunk {global_chunk_index + j}]")
+                                
                             contextual_batch = [
-                                f"{headers[j]}\n\n{chunk}"
-                                for j, chunk in enumerate(embed_batch)
+                                f"{headers[j]}\n\n{cinfo['text']}"
+                                for j, cinfo in enumerate(embed_batch)
                             ]
                             t0 = time.perf_counter()
                             embeddings = self.embedder.embed_text(contextual_batch)
@@ -208,18 +287,27 @@ class IngestionService:
                                 {
                                     "document_id": document_id,
                                     "box_id": box_id,
-                                    "content": chunk,
+                                    "content": cinfo['text'],
                                     "embedding": embeddings[j],
                                     "chunk_index": global_chunk_index + j,
-                                    "page_start": page_start + 1,
-                                    "page_end": page_end,
-                                    "section_title": page_to_section.get(page_start + 1),
+                                    "page_start": cinfo['page_start'],
+                                    "page_end": cinfo['page_end'],
+                                    "section_title": page_to_section.get(cinfo['page_start']),
                                     "metadata": {
                                         "type": file_type,
-                                        "context_header": headers[j]
+                                        "context_header": headers[j],
+                                        "chunk_kind": "child",
+                                        # PDF extraction supplies TOC/heading labels per page.
+                                        # A page range without a detected label is a safe fallback
+                                        # parent, rather than pretending a cross-topic batch is one section.
+                                        "parent_id": f"pdf-section-{sec}",
+                                        "parent_title": sec,
+                                        "section_path": [sec],
+                                        "block_type": "section",
+                                        "child_index_in_parent": global_chunk_index + j,
                                     }
                                 }
-                                for j, chunk in enumerate(embed_batch)
+                                for j, cinfo in enumerate(embed_batch)
                             ]
     
                             t0 = time.perf_counter()
@@ -243,19 +331,11 @@ class IngestionService:
     
                     global_chunk_index += len(embed_batch)
     
-                del chunks
                 gc.collect()
     
                 logger.info(f"PDF '{filename}' | pages {page_start+1}-{page_end}/{total_pages} | {total_chunks_saved} chunks")
 
-        # Generate and store document summary as chunk 0
-        if all_text_for_summary:
-            t0 = time.perf_counter()
-            self._generate_document_summary(
-                text_preview="\n".join(all_text_for_summary),
-                filename=filename, box_id=box_id, file_type=file_type, document_id=document_id
-            )
-            t_summary += time.perf_counter() - t0
+
             
         t_total = time.perf_counter() - start_total
         avg_batch = total_chunks_saved / max(1, total_embed_batches)
@@ -263,7 +343,7 @@ class IngestionService:
         logger.info(
             f"INGESTION AUDIT [{filename}]: "
             f"Pages={total_pages} | Chunks={total_chunks_saved} | EmbedBatches={total_embed_batches} | AvgBatch={avg_batch:.1f} || "
-            f"Time: Total={t_total:.2f}s | Extract={t_extract:.2f}s | Split={t_split:.2f}s | Embed={t_embed:.2f}s | DB={t_db:.2f}s | Summary={t_summary:.2f}s"
+            f"Time: Total={t_total:.2f}s | Extract={t_extract:.2f}s | Split={t_split:.2f}s | Embed={t_embed:.2f}s | DB={t_db:.2f}s"
         )
 
         if total_chunks_saved == 0 and failed_batches == 0:
@@ -290,54 +370,32 @@ class IngestionService:
             raise ValueError("No extractable text was found in this document. The document may be scanned/image-only and requires OCR. (OCR can be introduced as a future ingestion capability.)")
 
         t0 = time.perf_counter()
-        chunks = self.text_splitter.split_text(raw_text)
+        # Build logical parents first (headings/sheets/datasets), then create
+        # embedding-sized children.  Only the children are embedded.
+        chunks = self.hierarchical_chunker.build_children(raw_text, file_type, self.text_splitter)
         t_split = time.perf_counter() - t0
         total_chunks = len(chunks)
         logger.info(f"Split '{filename}' into {total_chunks} chunks")
 
-        # Generate document summary before deleting raw_text
-        t0 = time.perf_counter()
-        self._generate_document_summary(
-            text_preview=raw_text[:3000],
-            filename=filename, box_id=box_id, file_type=file_type, document_id=document_id
-        )
-        t_summary = time.perf_counter() - t0
-        del raw_text
+
 
         total_batches = (total_chunks + self.batch_size - 1) // self.batch_size
         failed_batches = 0
         global_chunk_index = 1
         
-        def extract_section_title(text: str, current_title: str) -> str:
-            lines = text.split("\n")
-            title = current_title
-            for line in lines:
-                line_stripped = line.strip()
-                if line_stripped.startswith("## "):
-                    title = line_stripped.lstrip("#").strip()
-                elif line_stripped.startswith("--- Sheet: ") and line_stripped.endswith(" ---"):
-                    title = line_stripped.replace("--- Sheet:", "").replace("---", "").strip()
-            return title
-
-        current_section = ""
-        enriched_chunks = []
-        for chunk in chunks:
-            current_section = extract_section_title(chunk, current_section)
-            enriched_chunks.append((chunk, current_section))
-
         for i in range(0, total_chunks, self.batch_size):
             batch_num = i // self.batch_size + 1
-            batch_data = enriched_chunks[i : i + self.batch_size]
+            batch_data = chunks[i : i + self.batch_size]
 
             max_retries = 3
             for attempt in range(max_retries):
                 try:
                     headers = [
-                        f"[Document: {filename} | Type: {file_type} | Chunk {i + j + 1}/{total_chunks}]"
-                        for j in range(len(batch_data))
+                        f"[Document: {filename} | Type: {file_type} | Section: {' > '.join(item.section_path)} | Chunk {i + j + 1}/{total_chunks}]"
+                        for j, item in enumerate(batch_data)
                     ]
                     contextual_batch = [
-                        f"{headers[j]}\n\n{item[0]}"
+                        f"{headers[j]}\n\n{item.content}"
                         for j, item in enumerate(batch_data)
                     ]
 
@@ -350,13 +408,14 @@ class IngestionService:
                         {
                             "document_id": document_id,
                             "box_id": box_id,
-                            "content": item[0],
+                            "content": item.content,
                             "embedding": embeddings[j],
                             "chunk_index": global_chunk_index + j,
-                            "section_title": item[1] if item[1] else None,
+                            "section_title": item.parent_title if item.parent_title not in {"Document", "Dataset", "Workbook"} else None,
                             "metadata": {
                                 "type": file_type,
-                                "context_header": headers[j]
+                                "context_header": headers[j],
+                                **item.metadata(),
                             }
                         }
                         for j, item in enumerate(batch_data)
@@ -387,7 +446,7 @@ class IngestionService:
         logger.info(
             f"INGESTION AUDIT [{filename}]: "
             f"Pages=N/A | Chunks={total_chunks} | EmbedBatches={total_batches} | AvgBatch={avg_batch:.1f} || "
-            f"Time: Total={t_total:.2f}s | Extract={t_extract:.2f}s | Split={t_split:.2f}s | Embed={t_embed:.2f}s | DB={t_db:.2f}s | Summary={t_summary:.2f}s"
+            f"Time: Total={t_total:.2f}s | Extract={t_extract:.2f}s | Split={t_split:.2f}s | Embed={t_embed:.2f}s | DB={t_db:.2f}s"
         )
 
         if failed_batches > 0:
@@ -402,6 +461,34 @@ class IngestionService:
         if success:
             self.lexical_store.invalidate_box(box_id)
         return success
+
+    @staticmethod
+    def _merge_small_pdf_chunks(chunk_docs_raw, source_text: str, min_chunk_size: int = 200):
+        """Merge small PDF chunks without breaking their source offsets.
+
+        Recursive chunks can overlap. Concatenating two overlapping chunk texts
+        creates a string that never appeared in the source document, making
+        exact page mapping impossible. Instead, use the original source span
+        from the first chunk's start through the small chunk's end.
+        """
+        merged = []
+        for chunk in chunk_docs_raw:
+            if len(chunk.page_content) >= min_chunk_size or not merged:
+                merged.append(chunk)
+                continue
+
+            previous = merged[-1]
+            start = previous.metadata.get("start_index", 0)
+            small_start = chunk.metadata.get("start_index", 0)
+            end = small_start + len(chunk.page_content)
+
+            if 0 <= start <= small_start <= end <= len(source_text):
+                previous.page_content = source_text[start:end]
+            else:
+                # Keeping the small chunk is safer than inventing text when
+                # the splitter cannot provide a valid source span.
+                merged.append(chunk)
+        return merged
 
     def list_files(self, box_id: str) -> List[str]:
         """Lists all unique filenames for a Box."""
@@ -554,36 +641,4 @@ class IngestionService:
         }
         return type_map.get(ext, "Document")
 
-    def _generate_document_summary(self, text_preview: str, filename: str, box_id: str,
-                                    file_type: str, document_id: str):
-        """
-        Uses the LLM to generate a document summary and stores it as a special chunk.
 
-        This helps answer "what is this document about?" queries and improves
-        retrieval for broad questions about document contents.
-        """
-        if not self.llm:
-            return  # No LLM available — skip summary generation
-
-        try:
-            summary = self.llm.generate_response(
-                system_prompt=(
-                    "You are a document summarizer. Given only a partial preview of the beginning of a document, "
-                    "write a concise 3-5 sentence summary describing what the document contains, "
-                    "its key topics, and its apparent purpose. Do NOT infer or hallucinate unseen content."
-                ),
-                user_prompt=f"Document: {filename} (Type: {file_type})\n\nContent preview:\n{text_preview[:2500]}",
-                temperature=0.0,
-            )
-
-            if not summary or len(summary) < 20:
-                logger.warning(f"Summary generation returned empty result for '{filename}'")
-                return
-
-            # Store summary in the documents table directly
-            self.db.update_document_summary(document_id, summary)
-
-            logger.info(f"Generated and stored document summary for '{filename}'")
-
-        except Exception as e:
-            logger.warning(f"Document summary generation failed for '{filename}': {e}")

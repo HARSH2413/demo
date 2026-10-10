@@ -47,6 +47,7 @@ def test_chat_service_first_pass_good(chat_service):
     
     mock_doc = {"document_id": "doc1", "content": "hello", "chunk_index": 0, "rerank_score": 0.8}
     chat_service.retrieval_engine.retrieve_documents.return_value = [mock_doc]
+    chat_service.evidence_engine.filter_and_expand.return_value = [mock_doc]
     chat_service.evidence_engine.get_doc_relevance_score.return_value = 0.8
     chat_service.evidence_engine.assign_evidence_ids.return_value = [{"evidence_id": "[E1]", **mock_doc}]
     chat_service.evidence_engine.build_context_text.return_value = "Context"
@@ -74,6 +75,7 @@ def test_chat_service_rescue_pass_triggered(chat_service):
     # First pass: weak
     mock_doc_weak = {"document_id": "doc1", "content": "hello", "chunk_index": 0, "rerank_score": -1.0}
     chat_service.retrieval_engine.retrieve_documents.return_value = [mock_doc_weak]
+    chat_service.evidence_engine.filter_and_expand.side_effect = [[mock_doc_weak], [mock_doc_weak]] # Side effect for first and rescue pass
     chat_service.evidence_engine.get_doc_relevance_score.side_effect = [-1.0, 0.9] # First check, then second check
     
     # Query expansion mock
@@ -116,6 +118,7 @@ def test_chat_service_fallback(chat_service):
     
     chat_service.retrieval_engine.retrieve_documents.return_value = [mock_doc_weak]
     chat_service.retrieval_engine.retrieve_documents_multi.return_value = [mock_doc_weak]
+    chat_service.evidence_engine.filter_and_expand.return_value = [mock_doc_weak]
     chat_service.evidence_engine.get_doc_relevance_score.return_value = -1.0 # Always weak
     
     chat_service.query_expansion.expand.return_value = {"rewritten_query": "test", "variants": ["v1"]}
@@ -136,6 +139,7 @@ def test_citation_integrity(chat_service):
     
     mock_doc = {"document_id": "doc1", "content": "hello", "chunk_index": 0, "rerank_score": 0.8}
     chat_service.retrieval_engine.retrieve_documents.return_value = [mock_doc]
+    chat_service.evidence_engine.filter_and_expand.return_value = [mock_doc]
     chat_service.evidence_engine.get_doc_relevance_score.return_value = 0.8
     chat_service.evidence_engine.assign_evidence_ids.return_value = [{"evidence_id": "[E1]", **mock_doc}]
     

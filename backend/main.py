@@ -12,6 +12,15 @@ from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 import traceback
+import logging
+
+class EndpointFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return "/api/v1/documents/" not in msg and "/api/v1/chat/sessions" not in msg
+
+# Silence uvicorn's built-in access logs for polling endpoints
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 from app.core.config import settings
 from app.core.rate_limiter import limiter
@@ -83,15 +92,23 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    logger.info(f"Incoming request: {request.method} {request.url}")
-    safe_headers = {
-        k: v for k, v in request.headers.items() 
-        if k.lower() in {"user-agent", "host", "accept", "content-type", "x-forwarded-for"}
-    }
-    logger.info(f"Headers: {safe_headers}")
+    # Skip logging for high-frequency polling endpoints to keep the terminal readable
+    path = request.url.path
+    is_polling_endpoint = request.method == "GET" and (
+        path.startswith("/api/v1/documents/") or path.startswith("/api/v1/chat/sessions")
+    )
+    
+    if not is_polling_endpoint:
+        logger.info(f"Incoming request: {request.method} {request.url}")
+        safe_headers = {
+            k: v for k, v in request.headers.items() 
+            if k.lower() in {"user-agent", "host", "accept", "content-type", "x-forwarded-for"}
+        }
+        logger.info(f"Headers: {safe_headers}")
+        
     try:
         response = await call_next(request)
-        if response.status_code >= 400:
+        if response.status_code >= 400 and not is_polling_endpoint:
             logger.error(f"Response status: {response.status_code}")
         return response
     except Exception as e:

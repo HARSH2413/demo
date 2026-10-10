@@ -73,6 +73,11 @@ class Citation(BaseModel):
     rerank_score: Optional[float] = None
 
 
+class CitationValidationMetadata(BaseModel):
+    unsupported_sentences: list[str] = []
+    stripped_citations: list[str] = []
+    retried: bool = False
+
 class EnhancedChatResponse(BaseModel):
     answer: str
     key_takeaways: list[str] = []
@@ -81,6 +86,7 @@ class EnhancedChatResponse(BaseModel):
     closest_matches: list[Citation] = []
     session_id: str
     confidence: str
+    validation_metadata: Optional[CitationValidationMetadata] = None
 
 
 # ── Endpoints ──

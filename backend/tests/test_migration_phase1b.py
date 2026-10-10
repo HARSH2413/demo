@@ -4,16 +4,16 @@ import uuid
 
 def test_embedding_dimension_length():
     """
-    Validate that the embedding dimension is 1024.
-    Since we use BAAI/bge-large-en-v1.5, the length must be 1024.
+    Validate that the embedding dimension is 768.
+    Since we use BAAI/bge-base-en-v1.5, the length must be 768.
     """
     from fastembed import TextEmbedding
-    model = TextEmbedding(model_name="BAAI/bge-large-en-v1.5")
+    model = TextEmbedding(model_name="BAAI/bge-base-en-v1.5")
     sample_text = ["test"]
     embeddings = list(model.embed(sample_text))
     
     assert len(embeddings) == 1
-    assert len(embeddings[0]) == 1024, f"Expected dimension 1024, got {len(embeddings[0])}"
+    assert len(embeddings[0]) == 768, f"Expected dimension 768, got {len(embeddings[0])}"
 
 # =====================================================================
 # LIVE DATABASE TESTS REQUIRED

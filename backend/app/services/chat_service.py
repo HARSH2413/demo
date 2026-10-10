@@ -49,11 +49,12 @@ class ChatService:
             db=db,
             min_relevance_score=min_relevance_score,
             min_relevance_score_low=min_relevance_score_low,
-            enable_neighbor_context=False,
+            enable_neighbor_context=settings.ENABLE_NEIGHBOR_CONTEXT,
         )
 
     def ask_question(self, question: str, box_id: str, session_id: str) -> dict:
         total_start = time.perf_counter()
+        fallback_phrase = settings.FALLBACK_PHRASE
 
         # 1. Save user question to stateful memory
         try:
@@ -92,6 +93,7 @@ class ChatService:
         retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
 
         # 5. Evidence Gate
+        retrieved_docs = self.evidence_engine.filter_and_expand(retrieved_docs)
         top_score = max((self.evidence_engine.get_doc_relevance_score(doc) for doc in retrieved_docs), default=0.0)
         
         rescue_used = False
@@ -119,10 +121,9 @@ class ChatService:
             rescue_ms = (time.perf_counter() - rescue_start) * 1000
             retrieval_ms += rescue_ms
             
+            retrieved_docs = self.evidence_engine.filter_and_expand(retrieved_docs)
             top_score = max((self.evidence_engine.get_doc_relevance_score(doc) for doc in retrieved_docs), default=0.0)
             
-        fallback_phrase = "I could not find the answer to this in the provided company documents."
-        
         # 6. Final Evidence Check
         if not retrieved_docs or top_score < settings.ANSWER_MIN_RELEVANCE_SCORE:
             logger.info(f"Rescue pass still weak (top_score={top_score:.3f}). Returning closest matches.")
@@ -164,12 +165,13 @@ class ChatService:
 
         messages = [{"role": "system", "content": system_prompt}]
         for msg in recent_history:
+            # Avoid duplicating the current question if it was already fetched from history
+            if msg.get("role") == "user" and msg.get("content") == question:
+                continue
             messages.append({"role": msg["role"], "content": msg["content"]})
             
-        # Append rewritten query as user message to LLM to keep focus (or just use original question, 
-        # but rewritten might be better if follow-up. Let's stick to original to not confuse UX, but with context)
-        # We don't append question here because history already has the user question!
-        # Wait, step 1 saved it, step 2 fetched it, so it's ALREADY in recent_history!
+        # Always explicitly append the current user question
+        messages.append({"role": "user", "content": question})
 
         # 9. Call Final LLM
         llm_start = time.perf_counter()
@@ -180,38 +182,33 @@ class ChatService:
             answer = fallback_phrase
         llm_ms = (time.perf_counter() - llm_start) * 1000
 
-        # 10. Citation Integrity Check
-        citations = []
-        if fallback_phrase not in answer:
-            answer = re.sub(r'【(E\d+)】', r'[\1]', answer)
-            found_numbers = set(re.findall(r'[\[\(\s]E(\d+)[\]\)\s]', answer))
-            used_evidence_ids = {f"[E{num}]" for num in found_numbers}
+        # 10. Citation Integrity Check (Firewall)
+        answer, citations, unsupported_sentences, stripped_citations = self._validate_and_build_citations(answer, retrieved_docs, fallback_phrase)
+        retried = False
+        
+        # Retry once if answer exists but citations failed completely and LLM did not already say fallback phrase
+        if not citations and fallback_phrase not in answer:
+            logger.info("Answer generated but zero valid citations. Retrying once with citation enforcement prompt.")
+            retry_prompt = (
+                "You previously answered without using the required evidence citations. "
+                "Please rewrite your answer citing the supporting evidence IDs using [E1], [E2], etc. from the context. "
+                f"If the context contains absolutely zero information to answer the question, output exactly: '{fallback_phrase}'"
+            )
             
-            valid_evidence_ids = {doc.get("evidence_id") for doc in retrieved_docs if doc.get("evidence_id")}
+            messages.append({"role": "assistant", "content": answer})
+            messages.append({"role": "user", "content": retry_prompt})
             
-            # Clean up invalid citations from text
-            for used_id in used_evidence_ids:
-                if used_id not in valid_evidence_ids:
-                    answer = answer.replace(used_id, "")
-            
-            # Build citations
-            for doc in retrieved_docs:
-                evidence_id = doc.get("evidence_id")
-                if evidence_id in used_evidence_ids and evidence_id in valid_evidence_ids:
-                    citations.append({
-                        "evidence_id": evidence_id,
-                        "document_id": doc.get("document_id"),
-                        "filename": doc.get("filename", ""),
-                        "chunk_index": doc.get("chunk_index"),
-                        "page_start": doc.get("page_start"),
-                        "page_end": doc.get("page_end"),
-                        "section_title": doc.get("section_title"),
-                        "content": doc.get("content", ""),
-                        "rerank_score": doc.get("rerank_score", None),
-                    })
-                    
-            if not citations:
+            try:
+                answer = self.llm.chat_with_messages(messages=messages, temperature=0.0)
+            except Exception as e:
+                logger.error(f"LLM retry call failed: {e}")
                 answer = fallback_phrase
+                
+            answer, citations, unsupported_sentences, stripped_citations = self._validate_and_build_citations(answer, retrieved_docs, fallback_phrase)
+            retried = True
+            
+        if not citations:
+            answer = fallback_phrase
 
         # Save assistant message
         try:
@@ -225,6 +222,8 @@ class ChatService:
             f"| llm={llm_ms:.1f}ms | total={total_ms:.1f}ms | rescue_used={rescue_used} | docs={len(retrieved_docs)}"
         )
 
+        confidence = self.evidence_engine.determine_confidence(retrieved_docs) if citations else "low"
+
         return {
             "answer": answer,
             "key_takeaways": [],
@@ -232,8 +231,129 @@ class ChatService:
             "citations": citations,
             "closest_matches": [],
             "session_id": session_id,
-            "confidence": "high",
+            "confidence": confidence,
+            "validation_metadata": {
+                "unsupported_sentences": unsupported_sentences,
+                "stripped_citations": stripped_citations,
+                "retried": retried
+            }
         }
+
+    def _validate_and_build_citations(self, answer: str, retrieved_docs: list[dict], fallback_phrase: str):
+        from app.utils.citation_validator import split_into_sentences, extract_normalized_numbers, is_factual_sentence
+        from app.core.config import settings
+        import re
+        
+        # Normalize bracket variations like 【E1】, 【E1†L1-L2】, [E1:p140], etc. to [E1]
+        answer = re.sub(r'【E(\d+)[^】]*】', r'[E\1]', answer)
+        answer = re.sub(r'\[E(\d+)[^\]]*\]', r'[E\1]', answer)
+        found_numbers = set(re.findall(r'\[E(\d+)\]', answer))
+        used_evidence_ids = {f"[E{num}]" for num in found_numbers}
+        
+        doc_map = {doc.get("evidence_id"): doc for doc in retrieved_docs if doc.get("evidence_id")}
+        valid_evidence_ids = set(doc_map.keys())
+        
+        sentences = split_into_sentences(answer)
+        unsupported_sentences = []
+        stripped_citations = []
+        
+        # 1. Clean up invalid citations that do not exist in the context
+        for used_id in used_evidence_ids:
+            if used_id not in valid_evidence_ids:
+                answer = re.sub(re.escape(used_id), "", answer)
+                stripped_citations.append(used_id)
+                
+        # Re-split sentences after removing nonexistent IDs
+        sentences = split_into_sentences(answer)
+        
+        pairs_to_score = []
+        sentence_contexts = []
+        
+        for i, s in enumerate(sentences):
+            if not is_factual_sentence(s):
+                continue
+                
+            cites_in_s = set(re.findall(r'\[E\d+\]', s))
+            valid_cites_in_s = cites_in_s.intersection(valid_evidence_ids)
+            
+            if not valid_cites_in_s:
+                unsupported_sentences.append(s)
+                continue
+                
+            # Strip citation tags before checking numbers to avoid matching citation digits
+            s_clean_of_tags = re.sub(r'\[E\d+\]', '', s).strip()
+            nums_in_s = extract_normalized_numbers(s_clean_of_tags)
+            
+            # Combine text of all cited chunks for number verification
+            chunk_texts = []
+            for cid in valid_cites_in_s:
+                doc = doc_map[cid]
+                text = doc.get("content", "")
+                if doc.get("neighbor_context"):
+                    text += " " + doc.get("neighbor_context", "")
+                chunk_texts.append(text)
+                
+            combined_text = " ".join(chunk_texts)
+            nums_in_chunk = extract_normalized_numbers(combined_text)
+            
+            number_supported = nums_in_s.issubset(nums_in_chunk) if nums_in_s else True
+            
+            if not number_supported:
+                unsupported_sentences.append(s)
+                if settings.CITATION_ENFORCEMENT_MODE == "strict":
+                    for cid in valid_cites_in_s:
+                        s = s.replace(cid, "")
+                        stripped_citations.append(cid)
+                    sentences[i] = s
+                    continue
+                
+            s_clean = s_clean_of_tags
+            for cid in valid_cites_in_s:
+                pairs_to_score.append((s_clean, doc_map[cid].get("content", "")))
+                sentence_contexts.append((i, cid))
+                
+        if pairs_to_score and self.reranker:
+            scores = self.reranker.score_pairs(pairs_to_score)
+            support_by_sentence = {}
+            for (idx, cid), score in zip(sentence_contexts, scores):
+                if idx not in support_by_sentence:
+                    support_by_sentence[idx] = []
+                support_by_sentence[idx].append((cid, score))
+                
+            for idx, results in support_by_sentence.items():
+                max_score = max(score for cid, score in results)
+                if max_score < settings.CITATION_SUPPORT_THRESHOLD:
+                    unsupported_sentences.append(sentences[idx])
+                    if settings.CITATION_ENFORCEMENT_MODE == "strict":
+                        for cid, _ in results:
+                            sentences[idx] = sentences[idx].replace(cid, "")
+                            stripped_citations.append(cid)
+                        
+        final_answer = " ".join(sentences)
+        
+        if settings.CITATION_ENFORCEMENT_MODE == "strict":
+            final_answer = " ".join([s for s in sentences if s not in unsupported_sentences])
+                
+        final_found = set(re.findall(r'\[E(\d+)\]', final_answer))
+        final_used = {f"[E{num}]" for num in final_found}
+        
+        citations = []
+        for doc in retrieved_docs:
+            cid = doc.get("evidence_id")
+            if cid in final_used and cid in valid_evidence_ids:
+                citations.append({
+                    "evidence_id": cid,
+                    "document_id": doc.get("document_id"),
+                    "filename": doc.get("filename", ""),
+                    "chunk_index": doc.get("chunk_index"),
+                    "page_start": doc.get("page_start"),
+                    "page_end": doc.get("page_end"),
+                    "section_title": doc.get("section_title"),
+                    "content": doc.get("content", ""),
+                    "rerank_score": doc.get("rerank_score", None),
+                })
+                
+        return final_answer, citations, unsupported_sentences, list(set(stripped_citations))
 
     def _build_system_prompt(self, context_text: str, fallback_phrase: str) -> str:
         return f"""You are DocIntel, an expert Enterprise Knowledge Agent.
@@ -244,12 +364,12 @@ INSTRUCTIONS:
 3. OUTPUT STRUCTURE: Keep a natural narrative format, but still separate major ideas into clear paragraphs.
 4. EVIDENCE CITATION: The CONTEXT is divided into numbered evidence blocks (e.g., '--- EVIDENCE [E1] ---').
    - You MUST base your factual claims ONLY on this supplied evidence.
-   - You MUST cite the supporting evidence IDs in your answer using the format [E1], [E2], etc.
+   - You MUST cite the supporting evidence IDs in your answer using the format [E1], [E2], etc. immediately after the claims they support.
    - If the user asks about a specific document, ONLY use facts from that file's sections.
-   - If the evidence does not support a complete answer, explicitly state what is missing.
-5. SYNTHESIS: When multiple chunks from the SAME document are relevant, synthesize them into a coherent answer rather than repeating information.
+   - If the evidence only contains brief mentions, a heading, or partial information about the topic, state what is mentioned in the evidence, cite the evidence ID (e.g., [E1]), and explicitly state what is missing or that detailed explanations/clauses are not present in the provided documents.
+5. SYNTHESIS: When multiple chunks are relevant, synthesize them into a coherent answer rather than repeating information.
 6. SOURCE-CLAIM DISCIPLINE: Do not make a claim unless it is supported by at least one retrieved source chunk.
-7. THE SHIELD: If the CONTEXT does not contain enough information, reply with EXACTLY: "{fallback_phrase}"
+7. THE SHIELD: ONLY IF the CONTEXT contains absolutely zero information or relevance to the question, reply with EXACTLY: "{fallback_phrase}"
 
 CONTEXT:
 {context_text}"""

@@ -99,8 +99,11 @@ class SupabaseAdapter(IVectorStore):
         before_sleep=lambda rs: logger.warning(f"Supabase save_document_chunks retry (attempt {rs.attempt_number})"),
     )
     def save_document_chunks(self, chunks: List[Dict[str, Any]]) -> int:
-        """Saves a batch of chunks for a document."""
-        response = self.client.table("document_chunks").insert(chunks).execute()
+        """Saves a batch of chunks for a document idempotently."""
+        response = self.client.table("document_chunks").upsert(
+            chunks,
+            on_conflict="document_id,chunk_index"
+        ).execute()
         return len(response.data)
 
     @retry(
@@ -301,7 +304,7 @@ class SupabaseAdapter(IVectorStore):
 
         response = (
             self.client.table("document_chunks")
-            .select("id, document_id, content, chunk_index, page_start, page_end")
+            .select("id, document_id, content, chunk_index, page_start, page_end, metadata")
             .eq("document_id", document_id)
             .gte("chunk_index", min_index)
             .lte("chunk_index", max_index)
@@ -344,7 +347,7 @@ class SupabaseAdapter(IVectorStore):
             
             response = (
                 self.client.table("document_chunks")
-                .select("id, document_id, content, chunk_index, page_start, page_end")
+                .select("id, document_id, content, chunk_index, page_start, page_end, metadata")
                 .or_(or_str)
                 .order("chunk_index")
                 .execute()

@@ -20,3 +20,10 @@ __pycache__/
 
 # google credentials
 google_credentials.json
+
+# --- Data, Cache & Local Test Artifacts ---
+.data/
+backend/.data/
+*.pdf
+dry_run_output*.txt
+*.log
