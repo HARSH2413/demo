@@ -27,3 +27,4 @@ backend/.data/
 *.pdf
 dry_run_output*.txt
 *.log
+batch*.md
